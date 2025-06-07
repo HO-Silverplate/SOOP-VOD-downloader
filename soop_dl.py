@@ -250,7 +250,6 @@ def load_config(path: str) -> dict[str, str]:
 
     return config
 
-
 def _check_auth(session: requests.Session) -> bool:
     """
     세션이 SOOP에 로그인되어 있는지 확인합니다.
@@ -365,9 +364,8 @@ def session_setup(config: dict[str, str]) -> tuple[requests.Session, bool]:
     )
 
     res = True
-    if username != "" and password != "":
-        if res:=_login(session, username, password, second_password):
-            console.print("로그인 성공", style="green")
+    if res:=_login(session, username, password, second_password):
+        console.print("로그인 성공", style="green")
 
     return session, res
 
@@ -527,6 +525,7 @@ def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session,
     console.print("다운로드를 시작하는 중...", style="yellow")
     console.print("다운로드를 중단하려면 Q를 입력하세요.",style="yellow")
     print()
+    
     try:
         title_no = _parse_title_no(url)
     except:
@@ -628,6 +627,7 @@ def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session,
                 return True
         progress.update(task, completed=len(part_list), description="임시 파일 정리 완료", refresh=False)
         progress.stop()
+        
         console.print()
         console.print(f"다운로드가 완료되었습니다: ",style="green",end="")
         console.print(os.path.abspath(_path).replace("\\",'/'))
