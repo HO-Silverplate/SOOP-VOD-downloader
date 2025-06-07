@@ -3,6 +3,8 @@
 SOOP VOD를 다운로드하는 유틸리티 프로그램입니다.
 윈도우 외의 실행 환경에서는 테스트되지 않았습니다.
 
+개발자에게 메일 보내기 : [headonsilverplate@gmail.com](mailto:headonsilverplate@gmail.com)
+
 ## Prerequisites
 
 - `Python 3.12`
@@ -14,33 +16,32 @@ SOOP VOD를 다운로드하는 유틸리티 프로그램입니다.
 
 [여기](https://github.com/HO-Silverplate/SOOP-VOD-downloader/releases/latest)에서 최신 버전 빌드를 다운받을 수 있습니다.
 
-## 소스 코드 설치 및 셋업
+## 사용법
+
+```shell
+soop_dl -h
+```
+
+자세한 사용법은 `soop_dl -h`를 참고하세요.
+
+## 소스 코드 클론 및 환경 셋업
 
 ```shell
 git clone https://github.com/HO-Silverplate/SOOP-VOD-downloader.git
 cd SOOP-VOD-downloader
 
-# Python Venv setup
 python -m venv venv
 venv/scripts/activate
 pip install -r requirements.txt
 ```
 
-## 사용
-
-### Python (powershell)
+코드 수정, 빌드, 실행을 위해 필요합니다.
 
 ```shell
-#도움말
-python soop_dl.py -h
+python soop_dl.py
 ```
 
-### Executable (CMD)
-
-```shell
-#도움말
-soop_dl -h
-```
+파이썬 3.12 이상의 버전에서 실행 가능합니다.
 
 ## 패키징
 

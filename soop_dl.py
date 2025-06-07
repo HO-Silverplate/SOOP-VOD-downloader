@@ -90,7 +90,7 @@ def _parse_title_no(url: str) -> int:
     if (not "vod.sooplive.co.kr" in url_args.netloc) or (not "player" in url_args.path):
         raise ValueError()
     try:
-        return int(url_args.path.split("/")[1])
+        return int(url_args.path.split("/")[2])
     except:
         raise ValueError()
 
@@ -239,7 +239,7 @@ def load_config(path: str) -> dict[str, str]:
     설정 파일을 불러옵니다.
     """
     if not os.path.exists(path) or not os.path.exists(os.path.join(os.getcwd(),path)):
-        raise OSError()
+        raise FileNotFoundError()
     with open(path, "r") as f:
         config = json.load(f)
 
@@ -313,14 +313,14 @@ def _login(
                 return False
 
             case -11:
-                return _sec_login(session, username, password, sec_password)
+                return _sec_login(session, username, sec_password)
 
             case _:
                 console.print("로그인 실패: SOOP에 로그인할 수 없습니다.",style="yellow")
                 return False
 
 
-def _sec_login(session: requests.Session, username: str, password: str) -> bool:
+def _sec_login(session: requests.Session, username: str, sec_password: str) -> bool:
     """
     2차 인증을 수행합니다.
     """
@@ -331,7 +331,7 @@ def _sec_login(session: requests.Session, username: str, password: str) -> bool:
                 "szWork": "second_login",
                 "szType": "json",
                 "szUid": username,
-                "szPassword": password,
+                "szPassword": sec_password,
                 "szScriptVar": "oLoginRet",
                 "isSaveId": "false",
                 "isLoginRetain": "Y",
@@ -339,16 +339,16 @@ def _sec_login(session: requests.Session, username: str, password: str) -> bool:
         )
         response.raise_for_status()
     except:
-        console.print("서버에 연결할 수 없습니다.")
+        console.print("서버에 연결할 수 없습니다.", style="yellow")
         return False
     if response.status_code == 200 and response.json().get("RESULT", 0) == 1:
         return True
     else:
-        console.print("2차 인증에 실패했습니다.")
+        console.print("2차 인증에 실패했습니다.", style="yellow")
         return False
 
 
-def session_setup(config: dict[str, str]) -> requests.Session:
+def session_setup(config: dict[str, str]) -> tuple[requests.Session, bool]:
     """
     세션 기본 정보를 설정하고 로그인합니다.
     """
@@ -359,16 +359,15 @@ def session_setup(config: dict[str, str]) -> requests.Session:
         config.get(k, "") for k in ["username", "password", "second_password"]
     )
 
+    res = True
     if username != "" and password != "":
-        if _login(session, username, password, second_password):
+        if res:=_login(session, username, password, second_password):
             console.print("로그인 성공", style="green")
 
-    return session
+    return session, res
 
 @app.command(name=None,help="SOOP VOD를 다운로드할 수 있는 유틸리티입니다.")
 def main(
-    url: Annotated[str, typer.Argument(help="SOOP VOD URL",show_default=False)],
-    output_path: Annotated[str, typer.Option("-p","--path",help="영상의 저장 경로 (.mp4)", show_default=False,file_okay=True, dir_okay=True)]=None,
     quality:
         Annotated[
             str,
@@ -385,97 +384,154 @@ def main(
             ),
         ]
         = "auto",
-    config_path:
+    use_config:
         Annotated[
-            str,
-            typer.Option("-c","--config", help="설정 파일(config.json) 경로 (.json)", show_default=False),
+            bool,
+            typer.Option("-c","--config", help="설정 파일을 사용합니다.\n설정파일이 존재하지 않으면 새로 생성합니다.", show_default=False,is_flag=True),
         ]
-        = None,
+        = False,
     ffmpeg_path: Annotated[
         str,
-        typer.Option("-f","--ffmpeg", help="FFmpeg.exe 경로",show_default=False),
-    ] = "ffmpeg",
+        typer.Option("-f","--ffmpeg", help="FFmpeg.exe 경로 입력 \n출력에 사용되는 ffmpeg.exe의 경로를 지정합니다.",show_default=False),
+    ] = "ffmpeg"
 ):
-    config = {
-        "username": "",
-        "password": "",
-        "second_password": "",
-        "ffmpeg_path": ffmpeg_path,
-    }
-
-    print()
-    if config_path is None:
-        doLogin = typer.confirm("로그인하시겠습니까?")
-
-        if doLogin:
-            saved = ["닉네임","비밀번호"]
-            config["username"] = typer.prompt("아이디")
-            config["password"] = typer.prompt("비밀번호")
-            
-            config["second_password"] = typer.prompt(
-                "2차 비밀번호 (없으면 Enter)", default="", show_default=False
-            )
-            if config["second_password"] != "":
-                saved.append("2차 비밀번호")
-            if ffmpeg_path != "ffmpeg":
-                saved.append("FFmpeg 경로")
-
-            print()
-            if typer.confirm(f"설정을 저장할까요? 다음과 같은 설정이 변경되었습니다: {', '.join(saved)}"):
-                config_path = os.path.join(os.getcwd(), "config.json")
-                with open(config_path, "w") as f:
+    try:
+        config = {
+            "username": "",
+            "password": "",
+            "second_password": "",
+            "ffmpeg_path": ffmpeg_path,
+        }
+        if use_config:
+            try:
+                config = load_config("config.json")
+                console.print(f"설정 파일을 성공적으로 불러왔습니다.", style="green")
+            except FileNotFoundError:
+                console.print("설정 파일을 찾을 수 없습니다. 새로 생성합니다.", style="green")
+                use_config = os.path.join(os.getcwd(), "config.json")
+                with open(use_config, "w") as f:
                     json.dump(config, f, indent=4)
-    else:
+            except Exception as e:
+                console.print(f"설정 파일을 불러오는 중 오류가 발생하였습니다: {e}", style="red")
+                console.print("프로그램을 종료합니다.", style="red")
+                typer.Exit(code=1)
+                return
+        
+            if ffmpeg_path != "ffmpeg":
+                typer.confirm(f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?\n\n설정 정보는 config.json 파일에 저장됩니다.")
+                with open(os.path.join(os.getcwd(), "config.json"), "w") as f:
+                    json.dump(config, f, indent=4)
+        
         try:
-            config = load_config(config_path)
-        except Exception as e:
-            console.print(f"설정 파일을 불러오는 중 오류가 발생하였습니다: {e}", style="red")
-            console.print("프로그램을 종료합니다.", style="red")
-            typer.Exit(code=1)
-            return
-    
-        if ffmpeg_path != "ffmpeg":
-            typer.confirm(f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?\n\n설정 정보는 config.json 파일에 저장됩니다.")
-    
-    print()
-    session = session_setup(config)
+            ffmpeg_path = config.get("ffmpeg_path","ffmpeg").replace("\\", "/")
+            result = subprocess.run(
+                [ffmpeg_path, "-version"],
+                capture_output=True,
+                text=True,
+            )
+            if "ffmpeg" not in result.stdout:
+                raise RuntimeError()
+        except (RuntimeError,FileNotFoundError, subprocess.CalledProcessError) as e:
+            if use_config:
+                console.print(f"FFmpeg 경로가 잘못되었습니다: {ffmpeg_path}", style="red")
+                console.print("FFmpeg를 설치하거나 올바른 경로를 지정해주세요.", style="red")
+                typer.Exit(code=1)
+                return
+            else:
+                console.print("FFmpeg를 찾는 데 실패하였습니다.", style="red")
+                console.print("FFmpeg를 설치하거나 직접 경로를 지정해주세요.", style="red")
+                console.print("config.json 파일을 이용하거나 -f 옵션을 이용해 경로를 지정할 수 있습니다.", style="red")
+                typer.Exit(code=1)
+                return
+
+        saved:set = set()
+        if not use_config:
+            console.print("프로그램을 종료하려면 Ctrl+C를 입력하세요.", style="yellow")
+            print()
+            doLogin = typer.confirm("로그인하시겠습니까?")
+
+            if doLogin:
+                saved.add("닉네임")
+                saved.add("비밀번호")
+                config = login_form(config)
+
+                if config["second_password"] != "":
+                    saved.add("2차 비밀번호")
+
+        if config.get(ffmpeg_path,"ffmpeg") != "ffmpeg":
+            saved.add("FFmpeg 경로")
+        
+        print()
+        while not (res := session_setup(config))[1] and typer.confirm("로그인을 다시 시도할까요?"):
+            print()
+            saved.add("닉네임")
+            saved.add("비밀번호")
+            sec_tmp = config.get("second_password", "")
+            config = login_form(config)
+            if config["second_password"] != sec_tmp and config["second_password"] != "":
+                saved.add("2차 비밀번호")
+            print()
+        session = res[0]
+        print()
+        
+        if saved.__len__() != 0 and typer.confirm(f"설정을 저장할까요? 다음과 같은 설정이 변경되었습니다: {', '.join(saved)}"):
+            use_config = os.path.join(os.getcwd(), "config.json")
+            with open(use_config, "w") as f:
+                json.dump(config, f, indent=4)
+            print()
+        
+        while True:
+            url = typer.prompt(
+                "다운로드할 VOD의 URL을 입력하세요 (종료하려면 Enter)",
+                default="",
+                show_default=False,
+            ).strip()
+            if url == "":
+                print()
+                console.print("프로그램을 종료합니다.", style="Blue")
+                typer.Exit(code=0)
+                return
+            if download(
+                url,
+                ffmpeg_path=config["ffmpeg_path"],
+                quality=quality,
+                session=session,
+            ) == True:
+                return
+    except Exception as e:
+        console.print(f"{e}", style="red")
+        console.print("프로그램을 종료합니다.", style="red")
+        typer.Exit(code=1)
+        return
+        
+def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session):
     print()
     console.print("다운로드를 시작하는 중...", style="yellow")
-    console.print("다운로드를 중단하시려면 Q를 입력하세요.",style="yellow")
-    console.print("또는 Ctrl+C를 입력하여 프로그램을 강제 종료할 수 있습니다.",style="yellow")
+    console.print("다운로드를 중단하려면 Q를 입력하세요.",style="yellow")
     print()
-
-    if output_path:
-        output_path = os.path.abspath(os.path.join(os.getcwd(),output_path))
-        dir = os.path.dirname(output_path)
-        file = os.path.basename(output_path)
-    else:
-        dir = os.getcwd()
-        file = f"{title}.mp4"
-    
     try:
         title_no = _parse_title_no(url)
     except:
-        console.print("유효하지 않은 URL입니다.", err=True)
-        console.print("SOOP VOD 플레이어 URL이 맞는지 확인해 주세요.")
-        console.print("프로그램을 종료합니다.")
-        typer.Exit(code=1)
+        console.print("유효하지 않은 URL입니다.", style="red")
+        console.print("SOOP VOD 플레이어 URL이 맞는지 확인해 주세요.", style="red")
+        print()
         return
     try:
         title, vod_list = _get_manifest_urls(session, title_no, quality)
     except KeyError as e:
-        console.print("VOD 정보가 잘못되었습니다.", err=True)
-        console.print("1. URL이 올바른지 확인해주세요.")
-        console.print("2. 로그인 상태를 확인해주세요.")
-        console.print("프로그램을 종료합니다.")
-        typer.Exit(code=1)
+        console.print("VOD 정보가 잘못되었습니다.", style="red")
+        console.print("1. URL이 올바른지 확인해주세요.", style="red")
+        console.print("2. 로그인 상태를 확인해주세요.", style="red")
+        print()
         return
     except requests.exceptions.RequestException as e:
-        console.print("서버에 연결할 수 없습니다.", err=True)
-        console.print("네트워크 연결을 확인해주세요.")
-        console.print("프로그램을 종료합니다.")
-        typer.Exit(code=1)
+        console.print("서버에 연결할 수 없습니다.", style="red")
+        console.print("네트워크 연결을 확인해주세요.", style="red")
+        print()
         return
+    
+    dir = os.getcwd()
+    file = _delete_spec_char(f"{title}.mp4")
 
     part_list = []
     total_parts = len(vod_list)
@@ -483,6 +539,9 @@ def main(
     i = 0
     with Progress() as progress:
         try:
+            if total_parts == 0:
+                raise ValueError()
+            
             for (url,duration) in vod_list:
                 i+=1
                 _path, _proc = get_download_process(ffmpeg_path, url, dir,file, session=session)
@@ -503,14 +562,18 @@ def main(
                     progress.update(task, completed=duration, total = duration, description=f"{i}/{total_parts}구간 다운로드 완료",refresh=False)
             _proc.wait()
             _proc.terminate()
-            
-            if _proc.returncode != 0:
-                raise RuntimeError()
-        except:
+        except ValueError:
+            console.print("VOD 정보가 없습니다. 로그인, 성인인증 여부를 확인해 주세요.", style="yellow")
+            return
+                
+        
+        except Exception as e:
+            print()
             console.print(f"{i}/{total_parts} 구간 다운로드 중 오류가 발생하였습니다.", style="red")
+            console.print(e, style="red")
             console.print("프로그램을 종료합니다.",style="red")
             typer.Exit(code=1)
-            return
+            return True
 
         try:
             _path, _proc = get_concat_process(ffmpeg_path, dir, file, part_list)
@@ -518,7 +581,7 @@ def main(
             console.print(f"영상을 병합하는 중 오류가 발생하였습니다: {e}", style="red")
             console.print("프로그램을 종료합니다.", style="red")
             typer.Exit(code=1)
-            return
+            return True
         
         task = progress.add_task("영상 합치는 중...", total=total_duration)
         out_time = 0.0
@@ -551,12 +614,22 @@ def main(
             except OSError as e:
                 console.print(f"임시 파일 제거 중 오류가 발생하였습니다. 직접 제거해 주세요.", style="red")
                 typer.Exit(code=1)
-                return
+                return True
         progress.update(task, completed=len(part_list), description="임시 파일 정리 완료", refresh=False)
         progress.stop()
         console.print()
-        console.print(f"다운로드가 완료되었습니다: {os.path.abspath(_path)}",style="green")
+        console.print(f"다운로드가 완료되었습니다: ",style="green",end="")
+        console.print(os.path.abspath(_path).replace("\\",'/'))
         console.print()
+
+def login_form(config:dict[str, str]) -> dict[str, str]:
+    config["username"] = typer.prompt("아이디")
+    config["password"] = typer.prompt("비밀번호")
+    
+    config["second_password"] = typer.prompt(
+        "2차 비밀번호 (없으면 Enter)", default="", show_default=False
+    )
+    return config
 
 if __name__ == "__main__":
     app(prog_name="")
