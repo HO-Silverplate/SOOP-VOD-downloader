@@ -123,7 +123,7 @@ def _get_manifest_urls(
     objlist = data["files"]
     for file_dict in objlist:
         for fileset in file_dict["quality_info"]:
-            if fileset["label"] == desired_quality:
+            if fileset["resolution"].split("x")[-1] == desired_quality[:-1]:
                 vod_url_list.append((fileset["file"], file_dict["duration"]))
 
     title: str = data["title"]
@@ -136,7 +136,8 @@ def get_download_process(
     url: str,
     dir,file,
     session: requests.Session | None = requests.Session(),
-):
+    turbo: bool = False
+) -> tuple[str, subprocess.Popen]:
     """
     다운로드 프로세스를 생성하고, 임시 파일 경로와 프로세스를 반환합니다.
     """
@@ -172,10 +173,12 @@ def get_download_process(
         "-stats",
         "-progress",
         "pipe:1",
-        "-threads",
-        "0",
         path,
     ]
+    
+    if turbo:
+        ffmpeg_cmd.append("-threads")
+        ffmpeg_cmd.append("0")
 
     proc = subprocess.Popen(
         ffmpeg_cmd,
@@ -187,7 +190,7 @@ def get_download_process(
     return path,proc
 
 
-def get_concat_process(ffmpeg_path: str, dir: str, file:str, part_list: list[str]):
+def get_concat_process(ffmpeg_path: str, dir: str, file:str, part_list: list[str],turbo:bool = False) -> tuple[str, subprocess.Popen]:
     """
     병합 프로세스를 생성하고, 최종 파일 경로와 프로세스를 반환합니다.
     """
@@ -220,10 +223,12 @@ def get_concat_process(ffmpeg_path: str, dir: str, file:str, part_list: list[str
         "-stats",
         "-progress",
         "pipe:1",
-        "-threads",
-        "0",
         export_path,
     ]
+    
+    if turbo:
+        concat_cmd.append("-threads")
+        concat_cmd.append("0")
 
     proc = subprocess.Popen(
         concat_cmd, 
@@ -375,10 +380,9 @@ def main(
                 "-q",
                 "--quality",
                 help="""
-            목표 비디오 품질\n
+            목표 비디오 품질을 설정합니다.\n
             목표하는 품질이 존재하지 않을 경우 최고 품질로 다운로드합니다.\n
-            auto: 최고 품질\n
-            options: 1440p, 1080p, 720p, 540p, 360p, auto
+            options: 1440p, 1080p, 720p, 540p, auto
             """,
                 show_default=False,
             ),
@@ -392,8 +396,17 @@ def main(
         = False,
     ffmpeg_path: Annotated[
         str,
-        typer.Option("-f","--ffmpeg", help="FFmpeg.exe 경로 입력 \n출력에 사용되는 ffmpeg.exe의 경로를 지정합니다.",show_default=False),
-    ] = "ffmpeg"
+        typer.Option("-f","--ffmpeg", help="출력에 사용되는 ffmpeg.exe의 경로를 지정합니다.",show_default=False),
+    ] = "ffmpeg",
+    turbo: Annotated[
+        bool,
+        typer.Option(
+            "-t",
+            "--turbo",
+            help="FFmpeg의 -threads 0 옵션을 사용합니다. \nCPU 사용량이 증가할 수 있습니다.",
+            show_default=False,
+            is_flag=True,
+        ),] = False,
 ):
     try:
         config = {
@@ -402,6 +415,10 @@ def main(
             "second_password": "",
             "ffmpeg_path": ffmpeg_path,
         }
+        
+        if turbo:
+            console.print("고성능 모드가 활성화되었습니다.", style="magenta")
+        
         if use_config:
             try:
                 config = load_config("config.json")
@@ -496,6 +513,7 @@ def main(
                 ffmpeg_path=config["ffmpeg_path"],
                 quality=quality,
                 session=session,
+                turbo=turbo,
             ) == True:
                 return
     except Exception as e:
@@ -504,7 +522,7 @@ def main(
         typer.Exit(code=1)
         return
         
-def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session):
+def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session, turbo:bool):
     print()
     console.print("다운로드를 시작하는 중...", style="yellow")
     console.print("다운로드를 중단하려면 Q를 입력하세요.",style="yellow")
@@ -541,10 +559,14 @@ def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session)
         try:
             if total_parts == 0:
                 raise ValueError()
+        except ValueError:
+            console.print("VOD 정보가 없습니다. 로그인, 성인인증 여부를 확인해 주세요.", style="yellow")
+            return
             
+        try:
             for (url,duration) in vod_list:
                 i+=1
-                _path, _proc = get_download_process(ffmpeg_path, url, dir,file, session=session)
+                _path, _proc = get_download_process(ffmpeg_path, url, dir,file, session=session, turbo=turbo)
                 part_list.append(_path)
                 
                 task = progress.add_task(f"{i}/{total_parts}구간 다운로드 중...", total=duration)
@@ -554,19 +576,13 @@ def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session)
                     if out_time == -1:
                         break
                     progress.update(task, completed=out_time)
-                if out_time != -1 and out_time < duration - 1:
+
+                if progress._tasks[task].completed < duration - 1:
+                    total_duration += progress._tasks[task].completed
                     progress.update(task, description=f"{i}/{total_parts}구간 다운로드 중단", refresh=False)
-                    total_duration += progress.tasks[i-1].completed
                     break
                 else:
                     progress.update(task, completed=duration, total = duration, description=f"{i}/{total_parts}구간 다운로드 완료",refresh=False)
-            _proc.wait()
-            _proc.terminate()
-        except ValueError:
-            console.print("VOD 정보가 없습니다. 로그인, 성인인증 여부를 확인해 주세요.", style="yellow")
-            return
-                
-        
         except Exception as e:
             print()
             console.print(f"{i}/{total_parts} 구간 다운로드 중 오류가 발생하였습니다.", style="red")
@@ -576,7 +592,7 @@ def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session)
             return True
 
         try:
-            _path, _proc = get_concat_process(ffmpeg_path, dir, file, part_list)
+            _path, _proc = get_concat_process(ffmpeg_path, dir, file, part_list, turbo=turbo)
         except Exception as e:
             console.print(f"영상을 병합하는 중 오류가 발생하였습니다: {e}", style="red")
             console.print("프로그램을 종료합니다.", style="red")
@@ -600,11 +616,6 @@ def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session)
                 description=f"영상 병합 완료",
                 refresh=False
             )
-        
-        _proc.wait()
-        _proc.terminate()
-        if _proc.returncode != 0:
-            console.print("영상을 합치는 중 오류가 발생하였습니다.", style="red")
             
         task = progress.add_task("임시 파일 정리 중...", total=len(part_list))
         for part in part_list:
