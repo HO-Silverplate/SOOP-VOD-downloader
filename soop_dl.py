@@ -4,11 +4,9 @@ from typing import Annotated, Generator
 from rich.progress import Progress
 from rich.console import Console 
 import typer
-from dataclasses import dataclass
 import json
 import os
 import requests
-import m3u8
 import urllib.parse
 import tempfile
 import subprocess
@@ -367,7 +365,7 @@ def session_setup(config: dict[str, str]) -> requests.Session:
 
     return session
 
-@app.command(name=None,help="SOOP VOD를 다운로드할 수 있는 명령줄 도구입니다.")
+@app.command(name=None,help="SOOP VOD를 다운로드할 수 있는 유틸리티입니다.")
 def main(
     url: Annotated[str, typer.Argument(help="SOOP VOD URL",show_default=False)],
     output_path: Annotated[str, typer.Option("-p","--path",help="영상의 저장 경로 (.mp4)", show_default=False,file_okay=True, dir_okay=True)]=None,
