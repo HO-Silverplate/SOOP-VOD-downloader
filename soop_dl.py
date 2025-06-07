@@ -68,7 +68,7 @@ def read_out_time(proc: subprocess.Popen) -> Generator[int, None, None]:
     FFmpeg 프로세스의 stdout에서 out_time_ms 값을 읽어 밀리초 단위로 반환합니다.
     """
     while True:
-        line = proc.stdout.readline()
+        line:str = proc.stdout.readline()
         line = line.strip()
         if not line:
             yield -1
@@ -352,7 +352,7 @@ def _sec_login(session: requests.Session, username: str, sec_password: str) -> b
         return False
 
 
-def session_setup(config: dict[str, str]) -> tuple[requests.Session, bool]:
+def session_setup(config: dict[str, str],doLogin:bool) -> tuple[requests.Session, bool]:
     """
     세션 기본 정보를 설정하고 로그인합니다.
     """
@@ -364,8 +364,9 @@ def session_setup(config: dict[str, str]) -> tuple[requests.Session, bool]:
     )
 
     res = True
-    if res:=_login(session, username, password, second_password):
-        console.print("로그인 성공", style="green")
+    if doLogin:
+        if res:=_login(session, username, password, second_password):
+            console.print("로그인 성공", style="green")
 
     return session, res
 
@@ -477,7 +478,7 @@ def main(
             saved.add("FFmpeg 경로")
         
         print()
-        while not (res := session_setup(config))[1] and typer.confirm("로그인을 다시 시도할까요?"):
+        while not (res := session_setup(config,doLogin))[1] and typer.confirm("로그인을 다시 시도할까요?"):
             print()
             saved.add("닉네임")
             saved.add("비밀번호")
