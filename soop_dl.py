@@ -1,5 +1,5 @@
 import copy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import re
 import sys
 from typing import Annotated, Generator
@@ -114,9 +114,9 @@ class Types:
 
 @dataclass
 class Manifest:
-    title: Types.title
-    url_list: list[Types.player_url] = (None,)
-    duration_list: list[Types.duration] = (None,)
+    title: Types.title | None = ""
+    url_list: list[Types.player_url] = field(default_factory=list)
+    duration_list: list[Types.duration] = field(default_factory=list)
 
     def set_title(self, value: Types.title):
         """매니페스트의 제목을 설정합니다.
@@ -255,7 +255,7 @@ def _get_manifest_urls(
 
     objlist = data["files"]
     for file_dict in objlist:
-        for fileset in dict(file_dict["quality_info"]):
+        for fileset in file_dict["quality_info"]:
             if str(fileset["resolution"]).split("x")[-1] == desired_quality[:-1]:
                 manifest.add_vod(fileset["file"], file_dict["duration"])
 
@@ -522,7 +522,7 @@ def session_setup(
     session.headers.update(HEADERS)
 
     username, password, second_password = (
-        config.get(k, "") for k in ["username", "password", "second_password"]
+        config.get(k, "").strip() for k in ["username", "password", "second_password"]
     )
 
     res = True
@@ -629,6 +629,7 @@ def main(
 
                 if config["second_password"] != "":
                     saved.add("2차 비밀번호")
+                print()
 
         # Try setting up session
         print()
@@ -653,7 +654,7 @@ def main(
 
         print()
         if (
-            res[1]
+            res
             and len(saved) > 0
             # If Login was successful & Auth params changed, ask to save config
             and typer.confirm(
@@ -677,25 +678,25 @@ def main(
                 manifest = _get_manifest_urls(session, url, quality)
             except ValueError as e:
                 print()
-                console.print(e, style="red")
+                console.print(f"ValueError: {e}", style="red")
                 console.print(
                     "SOOP VOD 플레이어 URL이 맞는지 확인해 주세요.", style="red"
                 )
                 console.print("프로그램을 종료합니다.", style="Blue")
                 typer.Exit(code=0)
-                raise
+                return
             except KeyError as e:
                 print()
                 console.print(f"VOD 정보가 잘못되었습니다: {e}", style="red")
                 console.print("로그인 또는 성인인증 상태를 확인해주세요.", style="red")
-                raise
+                return
             except requests.exceptions.RequestException as e:
                 print()
                 console.print(
                     f"정보를 불러오는 중 오류가 발생했습니다: {e}", style="red"
                 )
                 console.print("네트워크 연결을 확인해주세요.", style="red")
-                raise
+                return
 
             download(
                 manifest,
