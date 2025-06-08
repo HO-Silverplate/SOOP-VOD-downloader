@@ -1,8 +1,15 @@
 /tmp
 /build
 /dist
+__pycache__/
+
+.vscode/
+venv/
+env/
 
 *.mp4
 *.json
 *.log
 *.spec
+*.workspace
+*.pyc
