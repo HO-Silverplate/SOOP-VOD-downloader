@@ -5,26 +5,13 @@ import urllib.parse
 class Types:
     class title(str): ...
 
-    @dataclass
     class url(str):
-        __parsed: urllib.parse.ParseResult = None
-        __netloc: str = None
-        __path: str = None
-        __path_parts: list[str] = None
-
-        def __new__(cls, value: str):
-            return super().__new__(cls, value.strip())
-
         def __init__(self, value: str):
+            parsed = urllib.parse.urlparse(value)
+            self.__netloc = parsed.netloc
+            self.__path = parsed.path
+            self.__path_parts = parsed.path.split("/")
             super().__init__()
-            self.__parsed = urllib.parse.urlparse(value.strip())
-            self.__netloc = self.__parsed.netloc
-            self.__path = self.__parsed.path
-            self.__path_parts = self.__parsed.path.split("/")
-
-        @property
-        def parsed(self) -> urllib.parse.ParseResult:
-            return self.__parsed
 
         @property
         def netloc(self) -> str:
