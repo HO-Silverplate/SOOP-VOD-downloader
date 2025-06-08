@@ -210,8 +210,12 @@ def download(quality: str, ffmpeg_path: str, turbo: bool):
     :param turbo: 고성능 모드 활성화 여부
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
-    url = get_url_input()
-    manifest = get_manifest_wrap(url, quality)
+    try:
+        url = get_url_input()
+        manifest = get_manifest_wrap(url, quality)
+    except ValueError:
+        print()
+        return
 
     print()
     console.print(f"다운로드를 시작하는 중: ", style="yellow", end="")
@@ -483,9 +487,9 @@ def get_manifest_wrap(url, quality):
     try:
         return SOOP.get_manifest(url, quality)
     except ValueError as e:
-        console.print(f"ValueError: {e}", style="red")
-        console.print("SOOP VOD 플레이어 URL이 맞는지 확인해 주세요.", style="red")
-        raise Exception()
+        console.print(f"ValueError: {e}", style="yellow")
+        console.print("SOOP VOD 플레이어 URL이 맞는지 확인해 주세요.", style="yellow")
+        raise e
     except KeyError as e:
         console.print(f"VOD 정보가 잘못되었습니다: {e}", style="red")
         console.print("로그인 또는 성인인증 상태를 확인해주세요.", style="red")
