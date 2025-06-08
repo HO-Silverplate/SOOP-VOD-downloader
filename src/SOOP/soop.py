@@ -70,7 +70,7 @@ class SOOP:
 
         """
         session = cls.session()
-        if cls.check_auth(session):
+        if cls.check_auth():
             return True
 
         response = session.post(
@@ -94,7 +94,7 @@ class SOOP:
 
         match response.json().get("RESULT", 1024):
             case 1:
-                return cls.check_auth(session)
+                return cls.check_auth()
             case -1:
                 msg = "등록되지 않은 아이디이거나, 아이디 또는 비밀번호를 잘못 입력하셨습니다."
             case -3:
@@ -156,7 +156,6 @@ class SOOP:
         매니페스트가 비었거나 파싱에 실패하면 KeyError를 발생시킵니다.\n
         유효하지 않은 URL이라면 ValueError를 발생시킵니다.
 
-        :param session: requests.Session 객체
         :param url: VOD의 player_url
         :param quality: 원하는 비디오 품질 (예: "1080p", "auto")
         :return: Manifest 객체, VOD 제목과 URL 리스트가 포함됨

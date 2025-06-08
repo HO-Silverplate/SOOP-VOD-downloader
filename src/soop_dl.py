@@ -10,7 +10,7 @@ import requests
 import tempfile
 import subprocess
 
-from util import util
+import util
 from SOOP import SOOP, LoginError
 from model import Manifest
 
@@ -21,7 +21,7 @@ class ProcessError(Exception):
     """
 
 
-HELP_STRINGS = [
+HELP = [
     "SOOP VOD를 다운로드할 수 있는 유틸리티입니다.",
     "목표 비디오 품질을 설정합니다.\n목표하는 품질이 존재하지 않을 경우 최고 품질로 다운로드합니다.\noptions: 1440p, 1080p, 720p, 540p, auto",
     "설정 파일을 사용합니다. \n설정 파일이 존재하지 않으면 새로 생성합니다.",
@@ -33,6 +33,8 @@ FFMPEG_ERR = [
     "FFmpeg 경로가 잘못되었습니다: {ffmpeg_path}\nFFmpeg를 설치하거나 올바른 경로를 지정해주세요.",
     "FFmpeg를 찾는 데 실패하였습니다.\nFFmpeg를 설치하거나 직접 경로를 지정해주세요.\n-c 옵션으로 설정 파일을 불러오거나 -f 옵션으로 경로를 직접 지정할 수 있습니다.",
 ]
+
+QUALITY_MAPPING = ["1440p", "1080p", "720p", "540p", "자동"]
 
 console = Console()
 app = typer.Typer(
@@ -109,7 +111,7 @@ def _get_concat_process(
         mode="w", delete=False, suffix=".txt", encoding="utf-8"
     ) as tmp:
         for part in part_list:
-            tmp.write(f"file '{os.path.abspath(part)}'\n")
+            tmp.write(f"file '{part}'\n")
         tmp_path = tmp.name
 
     concat_cmd = [
@@ -147,29 +149,23 @@ def _get_concat_process(
     return proc
 
 
-@app.command(name=None, help=HELP_STRINGS[0])
+@app.command(name=None, help=HELP[0])
 def main(
     quality: Annotated[
         str,
-        typer.Option("-q", "--quality", help=HELP_STRINGS[1], show_default=False),
+        typer.Option("-q", "--quality", help=HELP[1], show_default=False),
     ] = "auto",
     use_config: Annotated[
         bool,
-        typer.Option(
-            "-c", "--config", help=HELP_STRINGS[2], show_default=False, is_flag=True
-        ),
+        typer.Option("-c", "--config", help=HELP[2], show_default=False, is_flag=True),
     ] = False,
     ffmpeg_path: Annotated[
         str,
-        typer.Option(
-            "-f", "--ffmpeg", help=HELP_STRINGS[3], show_default=False
-        ).replace("\\", "/"),
+        typer.Option("-f", "--ffmpeg", help=HELP[3], show_default=False),
     ] = "ffmpeg",
     turbo: Annotated[
         bool,
-        typer.Option(
-            "-t", "--turbo", help=HELP_STRINGS[4], show_default=False, is_flag=True
-        ),
+        typer.Option("-t", "--turbo", help=HELP[4], show_default=False, is_flag=True),
     ] = False,
 ):
     console.print("프로그램을 강제종료하려면 Ctrl+C를 입력하세요.", style="yellow")
@@ -177,6 +173,15 @@ def main(
         console.print("고성능 모드가 활성화되었습니다.", style="magenta")
 
     # Basic Config & ffmpeg flag
+    quality = quality.strip().lower()
+    if quality not in QUALITY_MAPPING:
+        console.print(
+            f"지원하지 않는 품질입니다. 지원하는 품질: {', '.join(QUALITY_MAPPING)}",
+            style="yellow",
+        )
+        console.print("자동으로 최고 품질로 설정합니다.", style="yellow")
+
+    ffmpeg_path = ffmpeg_path.strip().replace("\\", "/")
     ffmpeg_changed = ffmpeg_path != "ffmpeg"
     config = {
         "username": "",
@@ -189,17 +194,22 @@ def main(
         # Load & overwrite config if given -c Flag
         if use_config:
             config = handle_config(config)
+            ffmpeg_path = config["ffmpeg_path"]
 
         # Check if ffmpeg_path is valid
         # if unvalid, raise Exception with error message
+        print()
         if check_ffmpeg_path(ffmpeg_path):
-            print()
             if ffmpeg_changed and typer.confirm(
                 f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
             ):
                 dump_config(config)
         else:
-            msg = FFMPEG_ERR[0].format(ffmpeg_path) if use_config else FFMPEG_ERR[1]
+            msg = (
+                FFMPEG_ERR[0].format(ffmpeg_path=ffmpeg_path)
+                if use_config
+                else FFMPEG_ERR[1]
+            )
             raise Exception(msg)
 
         # If ffmpeg_path is set & valid, ask to overwrite config
@@ -209,7 +219,6 @@ def main(
         # If not, ask for login credentials
         # when login fails, ask for retry
         changed = set()
-        print()
         if typer.confirm("로그인하시겠습니까?"):
             print()
             if use_config:
@@ -217,15 +226,16 @@ def main(
             else:
                 config, changed = get_credential_input(config, changed)
                 res = try_login(config)
-            print()
+                print()
             while not res and typer.confirm("로그인을 다시 시도할까요?"):
                 print()
                 config, changed = get_credential_input(config, changed)
                 res = try_login(config)
                 print()
+        else:
+            res = SOOP.check_auth()
 
         # If Login was successful & Auth params changed, ask to save config
-        print()
         __flag = res and (len(changed) > 0)
         if __flag and typer.confirm(
             f"설정을 저장할까요? 다음과 같은 설정이 변경되었습니다: {', '.join(changed)}"
@@ -268,6 +278,7 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
     """
     설정 파일을 불러옵니다.
     설정 파일이 존재하지 않으면 새로 생성합니다.
+
     :param default: 기본 설정 값이 담긴 딕셔너리
     :return: 설정 파일에서 불러온 설정 값이 담긴 딕셔너리
     """
@@ -329,7 +340,7 @@ def download(quality: str, ffmpeg_path: str, turbo: bool):
 
     console.print()
     console.print(f"다운로드가 완료되었습니다: ", style="green", end="")
-    console.print(os.path.abspath(path).replace("\\", "/"), end="")
+    console.print(path.replace("\\", "/"), end="\n\n")
 
 
 def get_credential_input(config: dict[str, str], changed: set) -> tuple[str, str]:
@@ -397,7 +408,7 @@ def check_ffmpeg_path(ffmpeg_path: str) -> bool:
 
 def download_parts(
     progress: Progress, ffmpeg_path: str, manifest: Manifest, turbo: bool
-) -> int:
+) -> tuple[float, list[str]]:
     """
     지정된 Manifest의 각 구간을 다운로드합니다.
 
@@ -434,6 +445,7 @@ def download_parts(
                 break
             progress.update(task, completed=out_time)
 
+        total_duration += progress._tasks[task].completed
         _proc.wait()
         if _proc.returncode != 0:
             progress.update(
@@ -444,7 +456,6 @@ def download_parts(
             )
 
         if progress._tasks[task].completed < duration - 1:
-            total_duration += progress._tasks[task].completed
             progress.update(
                 task,
                 description=f"{i}/{total_parts}구간 다운로드 중단",
@@ -547,13 +558,17 @@ def get_url_input():
     :raises KeyboardInterrupt: 사용자가 입력을 중단한 경우
     """
 
-    url = typer.prompt(
-        "다운로드할 VOD의 URL을 입력하세요. (종료하려면 Enter)",
-        default="",
-        show_default=False,
-    )
+    url = str(
+        typer.prompt(
+            "다운로드할 VOD의 URL을 입력하세요. (종료하려면 Enter)",
+            default="",
+            show_default=False,
+        )
+    ).strip()
     if url == "":
         raise KeyboardInterrupt
+    else:
+        return url
 
 
 def get_manifest_wrap(url, quality):
