@@ -13,6 +13,8 @@ import urllib.parse
 import tempfile
 import subprocess
 
+from util import util
+
 VOD_API = "https://api.m.sooplive.co.kr/station/video/a/view"
 LOGIN_API = "https://login.sooplive.co.kr/app/LoginAction.php"
 LOGOUT_API = "https://login.sooplive.co.kr/app/LogOut.php"
@@ -45,121 +47,6 @@ LOGGED_IN = 1
 LOGGED_OUT = -1
 
 
-class Types:
-    class title(str): ...
-
-    @dataclass
-    class url(str):
-        __parsed: urllib.parse.ParseResult = None
-        __netloc: str = None
-        __path: str = None
-        __path_parts: list[str] = None
-
-        def __new__(cls, value: str):
-            return super().__new__(cls, value.strip())
-
-        def __init__(self, value: str):
-            super().__init__()
-            self.__parsed = urllib.parse.urlparse(value.strip())
-            self.__netloc = self.__parsed.netloc
-            self.__path = self.__parsed.path
-            self.__path_parts = self.__parsed.path.split("/")
-
-        @property
-        def parsed(self) -> urllib.parse.ParseResult:
-            return self.__parsed
-
-        @property
-        def netloc(self) -> str:
-            return self.__netloc
-
-        @property
-        def path(self) -> str:
-            return self.__path
-
-        @property
-        def path_parts(self) -> list[str]:
-            return self.__path_parts
-
-    @dataclass
-    class player_url(url):
-        __title_no: int = None
-
-        def __init__(self, value: str):
-            super().__init__(value)
-            self.__validate__()
-            try:
-                player_idx = self.path_parts.index("player")
-                self.__title_no = int(self.path_parts[player_idx + 1])
-            except (ValueError, IndexError):
-                raise ValueError("VOD 고유번호를 찾을 수 없습니다.")
-
-        def __validate__(self) -> None:
-            """유효한 player_url인지 확인합니다."""
-            if (
-                "player" not in self.path_parts
-                or "vod.sooplive.co.kr" not in self.netloc
-            ):
-                raise ValueError("유효하지 않은 URL입니다.")
-
-        @property
-        def title_no(self) -> int:
-            return self.__title_no
-
-    @dataclass
-    class vod_url(url): ...
-
-    class duration(int): ...
-
-
-@dataclass
-class Manifest:
-    title: Types.title | None = ""
-    url_list: list[Types.player_url] = field(default_factory=list)
-    duration_list: list[Types.duration] = field(default_factory=list)
-
-    def set_title(self, value: Types.title):
-        """매니페스트의 제목을 설정합니다.
-        :param value: VOD의 제목
-        """
-        self.title = value
-
-    def add_vod(self, url: Types.player_url, duration: Types.duration):
-        """
-        매니페스트에 VOD를 추가합니다.
-
-        :param url: VOD의 URL
-        :param duration: VOD의 길이 (밀리초 단위)
-        """
-        self.url_list.append(url)
-        self.duration_list.append(duration)
-
-    def count(self) -> int:
-        """
-        매니페스트에 포함된 VOD의 개수를 반환합니다.
-        """
-        return min(len(self.duration_list), len(self.url_list))
-
-    def is_empty(self) -> bool:
-        """
-        매니페스트가 비어있는지 확인합니다.
-        """
-        return self.count() == 0
-
-    def duration(self) -> Types.duration:
-        """
-        전체 VOD의 총 길이를 반환합니다.
-        """
-        return sum(self.duration_list)
-
-    @property
-    def list(self) -> list[tuple[Types.url, Types.duration]]:
-        """
-        URL과 Duration의 튜플 리스트를 반환합니다.
-        """
-        return list(zip(self.url_list, self.duration_list))
-
-
 class LoginError(Exception):
     """
     로그인 오류를 나타내는 예외 클래스입니다.
@@ -173,49 +60,7 @@ app = typer.Typer(
 )
 
 
-def get_unique_filename(file_path: str) -> str:
-    """
-    중복되는 파일명을 회피하고 파일명으로 사용할 수 없는 특수문자를 제거합니다.
-    """
-    # 파일 경로를 디렉토리, 파일명, 확장자로 분리
-    directory, filename = os.path.split(file_path)
-    name, ext = os.path.splitext(filename)
-
-    name = _delete_spec_char(name)
-
-    counter = 1
-    unique_path = file_path
-    while os.path.exists(unique_path):
-        unique_path = os.path.join(directory, f"{name}({counter}){ext}")
-        counter += 1
-
-    return unique_path
-
-
-def _delete_spec_char(string: str):
-    return re.sub(r'[\/:*?"<>|]', "", string)
-
-
-def _read_out_time(proc: subprocess.Popen) -> Generator[int, None, None]:
-    """
-    FFmpeg 프로세스의 stdout에서 out_time_ms 값을 읽어 밀리초 단위로 반환합니다.
-    """
-    while True:
-        line: str = proc.stdout.readline()
-        line = line.strip()
-        if not line:
-            yield -1
-            break
-        line = line.strip()
-        if line.startswith("out_time_ms"):
-            out_time = int(line.split("=")[1]) // 1000
-            yield out_time
-        elif line.startswith("progress") and "end" in line:
-            yield -1
-            break
-
-
-def _get_manifest_urls(
+def get_manifest(
     session: requests.Session, url: str, quality: str | None = None
 ) -> Manifest:
     """
@@ -278,7 +123,7 @@ def _get_download_process(
     """
     다운로드 프로세스를 생성하고, 임시 파일 경로와 프로세스를 반환합니다.
     """
-    path = get_unique_filename(os.path.join(dir, "tmp", file))
+    path = util.get_unique_filename(os.path.join(dir, "tmp", file))
 
     headers = {}
     cookies = session.cookies.get_dict()
@@ -344,7 +189,7 @@ def _get_concat_process(
     if not os.path.exists(dir):
         os.makedirs(dir)
 
-    export_path = get_unique_filename(os.path.join(dir, file))
+    export_path = util.get_unique_filename(os.path.join(dir, file))
 
     concat_cmd = [
         ffmpeg_path,
@@ -723,7 +568,7 @@ def download(
     console.print("다운로드를 중단하려면 Q를 입력하세요.", style="yellow")
 
     dir = os.getcwd()
-    file = _delete_spec_char(f"{manifest.title}.mp4")
+    file = util.delete_spec_char(f"{manifest.title}.mp4")
 
     part_list = []
     total_parts = manifest.count()
@@ -743,7 +588,7 @@ def download(
                 )
                 out_time = 0.0
 
-                for out_time in _read_out_time(_proc):
+                for out_time in util.read_out_time(_proc):
                     if out_time == -1:
                         break
                     progress.update(task, completed=out_time)
@@ -787,7 +632,7 @@ def download(
 
         task = progress.add_task("영상 합치는 중...", total=total_duration)
         out_time = 0.0
-        for out_time in _read_out_time(_proc):
+        for out_time in util.read_out_time(_proc):
             if out_time == -1:
                 break
             progress.update(task, completed=out_time)
