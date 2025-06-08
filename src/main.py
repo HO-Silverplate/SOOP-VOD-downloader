@@ -1,5 +1,4 @@
 import copy
-import sys
 from typing import Annotated
 from rich.progress import Progress
 from rich.console import Console
@@ -7,12 +6,12 @@ import typer
 import json
 import os
 import requests
-import tempfile
 import subprocess
 
-import util
-from SOOP import SOOP, LoginError
-from model import Manifest
+from src.process import download_process, concat_process
+from src.util import util
+from src.SOOP import SOOP, LoginError
+from src.model import Manifest
 
 
 class ProcessError(Exception):
@@ -34,7 +33,7 @@ FFMPEG_ERR = [
     "FFmpeg를 찾는 데 실패하였습니다.\nFFmpeg를 설치하거나 직접 경로를 지정해주세요.\n-c 옵션으로 설정 파일을 불러오거나 -f 옵션으로 경로를 직접 지정할 수 있습니다.",
 ]
 
-QUALITY_MAPPING = ["1440p", "1080p", "720p", "540p", "자동"]
+QUALITY_MAPPING = ["1440p", "1080p", "720p", "540p", "auto"]
 
 console = Console()
 app = typer.Typer(
@@ -43,110 +42,8 @@ app = typer.Typer(
 )
 
 
-def _get_download_process(
-    ffmpeg_path: str,
-    url: str,
-    path: str,
-    session: requests.Session | None = requests.Session(),
-    turbo: bool = False,
-) -> subprocess.Popen:
-    """
-    다운로드 프로세스를 생성하여 반환합니다.
-    """
-    headers = {}
-    cookies = session.cookies.get_dict()
-    if not os.path.exists(os.path.dirname(path)):
-        os.makedirs(os.path.dirname(path))
-
-    for k, v in session.headers.items():
-        if k.lower() not in ["content-length", "content-encoding"]:
-            headers[k] = v
-
-    header_args = []
-    for k, v in headers.items():
-        header_args.extend(["-headers", f"{k}: {v}"])
-    for k, v in cookies.items():
-        header_args.extend(["-headers", f"Cookie: {k}={v}"])
-
-    ffmpeg_cmd = [
-        ffmpeg_path,
-        *header_args,
-        "-i",
-        url,
-        "-c",
-        "copy",
-        "-movflags",
-        "faststart+frag_keyframe",
-        "-f",
-        "mp4",
-        "-v",
-        "quiet",
-        "-stats",
-        "-progress",
-        "pipe:1",
-        path,
-    ]
-
-    if turbo:
-        ffmpeg_cmd.append("-threads")
-        ffmpeg_cmd.append("0")
-
-    proc = subprocess.Popen(
-        ffmpeg_cmd,
-        stdin=sys.stdin,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-    )
-    return proc
-
-
-def _get_concat_process(
-    ffmpeg_path: str, export_path: str, part_list: list[str], turbo: bool = False
-) -> subprocess.Popen:
-    """
-    병합 프로세스를 생성하고, 최종 파일 경로와 프로세스를 반환합니다.
-    """
-    with tempfile.NamedTemporaryFile(
-        mode="w", delete=False, suffix=".txt", encoding="utf-8"
-    ) as tmp:
-        for part in part_list:
-            tmp.write(f"file '{part}'\n")
-        tmp_path = tmp.name
-
-    concat_cmd = [
-        ffmpeg_path,
-        "-f",
-        "concat",
-        "-safe",
-        "0",
-        "-i",
-        tmp_path,
-        "-c",
-        "copy",
-        "-threads",
-        "0",
-        "-y",
-        "-v",
-        "quiet",
-        "-stats",
-        "-progress",
-        "pipe:1",
-        export_path,
-    ]
-
-    if turbo:
-        concat_cmd.append("-threads")
-        concat_cmd.append("0")
-
-    proc = subprocess.Popen(
-        concat_cmd,
-        stdin=sys.stdin,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-    )
-    return proc
+def get_app() -> typer.Typer:
+    return app
 
 
 @app.command(name=None, help=HELP[0])
@@ -176,7 +73,7 @@ def main(
     quality = quality.strip().lower()
     if quality not in QUALITY_MAPPING:
         console.print(
-            f"지원하지 않는 품질입니다. 지원하는 품질: {', '.join(QUALITY_MAPPING)}",
+            f"지원하지 않는 품질입니다.\n지원하는 품질: {QUALITY_MAPPING}",
             style="yellow",
         )
         console.print("자동으로 최고 품질로 설정합니다.", style="yellow")
@@ -436,7 +333,7 @@ def download_parts(
         task = progress.add_task(
             f"{i}/{total_parts}구간 다운로드 중...", total=duration
         )
-        _proc = _get_download_process(
+        _proc = download_process(
             ffmpeg_path, url, tmp_path, session=session, turbo=turbo
         )
 
@@ -498,7 +395,7 @@ def concat_parts(
     path = util.get_unique_filename(os.path.join(os.getcwd(), f"{title}.mp4"))
 
     try:
-        _proc = _get_concat_process(ffmpeg_path, path, list, turbo=turbo)
+        _proc = concat_process(ffmpeg_path, path, list, turbo=turbo)
     except Exception as e:
         raise ProcessError("영상을 병합하는 중 오류가 발생하였습니다.")
 

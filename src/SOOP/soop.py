@@ -1,5 +1,5 @@
 import requests
-from model import Types, Manifest
+from src.model import Types, Manifest
 
 VOD_API = "https://api.m.sooplive.co.kr/station/video/a/view"
 LOGIN_API = "https://login.sooplive.co.kr/app/LoginAction.php"
