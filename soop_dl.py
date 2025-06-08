@@ -287,7 +287,7 @@ def _login(
                 "isSaveId": "false",
                 "isSavePw": "false",
                 "isSaveJoin": "false",
-                "isLoginRetain": "Y",
+                "isLoginRetain": "N",
             },
         )
 
@@ -321,8 +321,19 @@ def _login(
                 return _sec_login(session, username, sec_password)
 
             case _:
-                console.print("로그인 실패: SOOP에 로그인할 수 없습니다.",style="yellow")
+                console.print(
+                    "로그인 실패: SOOP에 로그인할 수 없습니다.", style="yellow"
+                )
                 return False
+
+
+def logout(session: requests.Session) -> bool:
+    res = session.get(LOGOUT_API)
+    try:
+        res.raise_for_status()
+    except:
+        console.print("로그아웃 실패: 서버에 연결할 수 없습니다.", style="yellow")
+        return False
 
 
 def _sec_login(session: requests.Session, username: str, sec_password: str) -> bool:
@@ -339,7 +350,7 @@ def _sec_login(session: requests.Session, username: str, sec_password: str) -> b
                 "szPassword": sec_password,
                 "szScriptVar": "oLoginRet",
                 "isSaveId": "false",
-                "isLoginRetain": "Y",
+                "isLoginRetain": "N",
             },
         )
         response.raise_for_status()
@@ -521,8 +532,14 @@ def main(
         console.print("프로그램을 종료합니다.", style="red")
         typer.Exit(code=1)
         return
-        
-def download(url:str, ffmpeg_path: str, quality: str, session: requests.Session, turbo:bool):
+    finally:
+        if session:
+            logout(session)
+
+
+def download(
+    url: str, ffmpeg_path: str, quality: str, session: requests.Session, turbo: bool
+):
     print()
     console.print("다운로드를 시작하는 중...", style="yellow")
     console.print("다운로드를 중단하려면 Q를 입력하세요.",style="yellow")
