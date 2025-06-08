@@ -5,8 +5,6 @@ SOOP VOD를 다운로드하는 유틸리티 프로그램입니다.
 
 개발자에게 메일 보내기 : [headonsilverplate@gmail.com](mailto:headonsilverplate@gmail.com)
 
-- `FFmpeg`
-
 ## 다운로드
 
 ![Github Release](https://img.shields.io/github/v/release/HO-silverplate/SOOP-VOD-downloader?link=https://github.com/HO-Silverplate/SOOP-VOD-downloader/releases/latest)
