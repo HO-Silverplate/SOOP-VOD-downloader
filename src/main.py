@@ -299,7 +299,7 @@ def check_ffmpeg_path(ffmpeg_path: str) -> bool:
             check=True,
         )
         return "ffmpeg" in result.stdout
-    except (FileNotFoundError, subprocess.CalledProcessError, FileNotFoundError):
+    except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
 
@@ -322,7 +322,7 @@ def download_parts(
     total_duration = 0.0
     tmp_list = []
 
-    for url, duration in manifest.list:
+    for url, duration in manifest.items:
         i += 1
         tmp_list.append(
             tmp_path := util.get_unique_filename(

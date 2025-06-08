@@ -9,13 +9,15 @@ def download_process(
     ffmpeg_path: str,
     url: str,
     path: str,
-    session: requests.Session | None = requests.Session(),
+    session: requests.Session | None = None,
     turbo: bool = False,
 ) -> subprocess.Popen:
     """
     다운로드 프로세스를 생성하여 반환합니다.
     """
     headers = {}
+    if session is None:
+        session = requests.Session()
     cookies = session.cookies.get_dict()
     if not os.path.exists(os.path.dirname(path)):
         os.makedirs(os.path.dirname(path))

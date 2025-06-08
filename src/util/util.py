@@ -37,7 +37,6 @@ def read_out_time(proc: subprocess.Popen) -> Generator[int, None, None]:
         if not line:
             yield -1
             break
-        line = line.strip()
         if line.startswith("out_time_ms"):
             out_time = int(line.split("=")[1]) // 1000
             yield out_time

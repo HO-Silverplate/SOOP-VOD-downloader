@@ -5,13 +5,13 @@ import urllib.parse
 class Types:
     class title(str): ...
 
-    class url(str):
+    @dataclass
+    class url:
         def __init__(self, value: str):
             parsed = urllib.parse.urlparse(value)
             self.__netloc = parsed.netloc
             self.__path = parsed.path
             self.__path_parts = parsed.path.split("/")
-            super().__init__()
 
         @property
         def netloc(self) -> str:

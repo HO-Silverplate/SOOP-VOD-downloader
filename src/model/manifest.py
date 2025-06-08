@@ -43,7 +43,7 @@ class Manifest:
         return sum(self.duration_list)
 
     @property
-    def list(self) -> list[tuple[Types.url, Types.duration]]:
+    def items(self) -> list[tuple[Types.url, Types.duration]]:
         """
         URL과 Duration의 튜플 리스트를 반환합니다.
         """
