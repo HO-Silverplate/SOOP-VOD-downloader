@@ -55,21 +55,20 @@ def download_process(
         ffmpeg_cmd.append("-threads")
         ffmpeg_cmd.append("0")
 
-    proc = subprocess.Popen(
+    return subprocess.Popen(
         ffmpeg_cmd,
         stdin=sys.stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         text=True,
     )
-    return proc
 
 
 def concat_process(
     ffmpeg_path: str, export_path: str, part_list: list[str], turbo: bool = False
 ) -> subprocess.Popen:
     """
-    병합 프로세스를 생성하고, 최종 파일 경로와 프로세스를 반환합니다.
+    병합 프로세스를 생성하고 반환합니다.
     """
     with tempfile.NamedTemporaryFile(
         mode="w", delete=False, suffix=".txt", encoding="utf-8"
@@ -103,11 +102,10 @@ def concat_process(
         concat_cmd.append("-threads")
         concat_cmd.append("0")
 
-    proc = subprocess.Popen(
+    return subprocess.Popen(
         concat_cmd,
         stdin=sys.stdin,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
     )
-    return proc

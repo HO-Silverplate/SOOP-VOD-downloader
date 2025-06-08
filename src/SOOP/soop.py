@@ -164,7 +164,7 @@ class SOOP:
         :raises requests.exceptions.RequestException: 요청 실패
         """
 
-        url = Types.player_url(url)
+        url: Types.player_url = Types.player_url(url)
         manifest = Manifest()
         session = cls.session()
 
@@ -194,7 +194,7 @@ class SOOP:
 
         manifest.set_title(data["title"])
 
-        if manifest.count() == 0:
+        if manifest.is_empty():
             raise KeyError("Manifest Empty.")
 
         return manifest

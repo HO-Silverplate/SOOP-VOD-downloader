@@ -9,7 +9,9 @@ class Manifest:
     duration_list: list[Types.duration] = field(default_factory=list)
 
     def set_title(self, value: Types.title):
-        """매니페스트의 제목을 설정합니다.
+        """
+        매니페스트의 제목을 설정합니다.
+
         :param value: VOD의 제목
         """
         self.title = value
