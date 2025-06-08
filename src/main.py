@@ -168,7 +168,6 @@ def dump_config(config: dict[str, str]) -> None:
 
     with open(os.path.join(os.getcwd(), "config.json"), "w") as f:
         json.dump(config, f, indent=4)
-    console.print(f"설정 파일을 저장했습니다", style="green")
 
 
 def handle_config(default: dict[str, str]) -> dict[str, str]:
@@ -192,6 +191,7 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
             )
             if os.path.exists(config_path):
                 os.remove(config_path)
+        finally:
             return default
     else:
         with open(config_path, "r") as f:
@@ -326,7 +326,9 @@ def download_parts(
         i += 1
         tmp_list.append(
             tmp_path := util.get_unique_filename(
-                os.path.join(os.getcwd(), "tmp", f"{manifest.title}.mp4")
+                os.path.join(
+                    os.getcwd(), "tmp", f"{util.delete_spec_char(manifest.title)}.mp4"
+                )
             )
         )
 
@@ -392,7 +394,9 @@ def concat_parts(
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
     task = progress.add_task("영상 합치는 중...", total=total_duration)
-    path = util.get_unique_filename(os.path.join(os.getcwd(), f"{title}.mp4"))
+    path = util.get_unique_filename(
+        os.path.join(os.getcwd(), f"{util.delete_spec_char(title)}.mp4")
+    )
 
     try:
         _proc = concat_process(ffmpeg_path, path, list, turbo=turbo)
