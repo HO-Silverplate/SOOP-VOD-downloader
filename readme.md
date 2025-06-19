@@ -13,7 +13,8 @@ SOOP VOD를 다운로드하는 유틸리티 프로그램입니다.
 
 ## Prerequisites
 
-- `FFmpeg`
+- `FFmpeg Version 7.1`
+>`FFmpeg` 마스터 브랜치 빌드는 오류가 발생하오니 꼭 릴리즈 빌드를 사용해 주시기 바랍니다.   
 
 ## 실행파일로 사용하기
 
