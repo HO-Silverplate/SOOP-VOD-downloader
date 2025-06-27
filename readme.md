@@ -39,6 +39,24 @@ soop_dl -c -q 720p -f '/path/to/ffmpeg.exe'
 사용 가능한 옵션 플래그들은 `soop_dl -h`를 참고하세요.
 > 빌드된 실행파일을 사용할 시 Python을 설치하지 않아도 실행이 가능합니다.
 
+### Batch 모드 사용하기
+
+`-b`플래그로 배치 모드를 사용할 수 있습니다.
+배치 모드는 .txt 파일을 읽고, 해당 파일에 작성된 모든 URL에 대해 다운로드를 시도합니다.
+
+배치 파일은 다음과 같이 작성해 주세요.
+
+```text
+https://vod.sooplive.co.kr/player/********
+https://vod.sooplive.co.kr/player/********
+https://vod.sooplive.co.kr/player/********
+vod.sooplive.co.kr/player/********
+https://vod.sooplive.co.kr/player/********
+vod.sooplive.co.kr/player/********
+...
+```
+모든 URL은 줄넘김으로 구분됩니다.
+
 ---
 
 ### PATH 등록
