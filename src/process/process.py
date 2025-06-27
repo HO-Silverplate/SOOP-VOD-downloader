@@ -48,12 +48,13 @@ def download_process(
         "-stats",
         "-progress",
         "pipe:1",
-        path,
     ]
 
     if turbo:
         ffmpeg_cmd.append("-threads")
         ffmpeg_cmd.append("0")
+
+    ffmpeg_cmd.append(path)
 
     return subprocess.Popen(
         ffmpeg_cmd,
