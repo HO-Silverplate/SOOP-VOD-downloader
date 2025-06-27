@@ -26,6 +26,7 @@ HELP = [
     "|  설정 파일을 사용합니다. \n\n|  설정 파일이 존재하지 않으면 새로 생성합니다.\n\n|",
     "|  출력에 사용되는 ffmpeg.exe의 경로를 지정합니다. \n\n|",
     "|  FFmpeg의 -threads 0 옵션을 사용합니다.\n\n|  CPU 사용량이 증가할 수 있습니다.\n\n|",
+    "|  배치 모드로 실행합니다. \n\n|  URL을 .txt 파일에서 읽어옵니다.\n\n|  파일 작성법은 README.md를 참고해 주세요.\n\n|",
 ]
 
 FFMPEG_ERR = [
@@ -64,6 +65,10 @@ def main(
         bool,
         typer.Option("-t", "--turbo", help=HELP[4], show_default=False, is_flag=True),
     ] = False,
+    batch: Annotated[
+        str,
+        typer.Option("-b", "--batch", help=HELP[5], show_default=False),
+    ] = "",
 ):
     console.print("프로그램을 강제종료하려면 Ctrl+C를 입력하세요.", style="yellow")
     if turbo:
@@ -140,9 +145,58 @@ def main(
             print()
             dump_config(config)
 
+        if batch.strip() != "":
+            if os.path.exists(batch):
+                urls = []
+                with open(batch, "r") as f:
+                    urls = [url.strip() for url in f.readlines() if url.strip()]
+
+                if len(urls) != 0:
+                    for url in urls:
+                        try:
+                            manifest = get_manifest_wrap(url, quality)
+                        except ValueError:
+                            console.print(f"ValueError: {e}", style="yellow")
+                            console.print(
+                                f"URL이 잘못되었습니다: {url}", style="yellow"
+                            )
+                            console.print("다음 URL로 계속합니다.", style="yellow")
+                            continue
+
+                        download(
+                            manifest,
+                            ffmpeg_path=config["ffmpeg_path"],
+                            turbo=turbo,
+                        )
+                    print()
+                    console.print("배치 다운로드가 완료되었습니다.")
+                else:
+                    console.print(
+                        "배치 파일이 비어 있습니다. URL을 추가해 주세요.",
+                        style="yellow",
+                    )
+
+                if not typer.confirm("일반 모드로 계속할까요?"):
+                    typer.Exit(code=0)
+                    return
+
+            else:
+                console.print(f"파일을 찾을 수 없습니다: {batch}", style="yellow")
+                console.print("배치 모드를 종료합니다.", style="yellow")
+                if not typer.confirm("일반 모드로 계속할까요?"):
+                    typer.Exit(code=0)
+                    return
+
         # main download loop
         print()
         while True:
+            try:
+                url = get_url_input()
+                manifest = get_manifest_wrap(url, quality)
+            except ValueError:
+                print()
+                continue
+
             download(
                 manifest,
                 ffmpeg_path=config["ffmpeg_path"],
