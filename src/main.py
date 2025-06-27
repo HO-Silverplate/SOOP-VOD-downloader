@@ -144,7 +144,7 @@ def main(
         print()
         while True:
             download(
-                quality,
+                manifest,
                 ffmpeg_path=config["ffmpeg_path"],
                 turbo=turbo,
             )
@@ -200,22 +200,16 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
             return config
 
 
-def download(quality: str, ffmpeg_path: str, turbo: bool):
+def download(manifest: Manifest, ffmpeg_path: str, turbo: bool):
     """
     지정된 해상도를 목표로 다운로드를 시작합니다 .
     만약 목표 해상도가 존재하지 않으면 최고 해상도로 다운로드합니다.
 
-    :param quality: 다운로드할 비디오의 목표 해상도
+    :param manifest: 다운로드할 매니페스트 객체
     :param ffmpeg_path: FFmpeg 실행 파일의 경로
     :param turbo: 고성능 모드 활성화 여부
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
-    try:
-        url = get_url_input()
-        manifest = get_manifest_wrap(url, quality)
-    except ValueError:
-        print()
-        return
 
     print()
     console.print(f"다운로드를 시작하는 중: ", style="yellow", end="")
@@ -241,7 +235,7 @@ def download(quality: str, ffmpeg_path: str, turbo: bool):
 
     console.print()
     console.print(f"다운로드가 완료되었습니다: ", style="green", end="")
-    console.print(path.replace("\\", "/"), end="\n\n")
+    console.print(path.replace("\\", "/"), end="\n")
 
 
 def get_credential_input(config: dict[str, str], changed: set) -> tuple[str, str]:
