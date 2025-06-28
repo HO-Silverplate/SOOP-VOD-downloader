@@ -163,11 +163,7 @@ def main(
                             console.print("다음 URL로 계속합니다.", style="yellow")
                             continue
 
-                        download(
-                            manifest,
-                            ffmpeg_path=config["ffmpeg_path"],
-                            turbo=turbo,
-                        )
+                        download(manifest, config["ffmpeg_path"], turbo)
                     print()
                     console.print("배치 다운로드가 완료되었습니다.")
                 else:
@@ -197,11 +193,7 @@ def main(
                 print()
                 continue
 
-            download(
-                manifest,
-                ffmpeg_path=config["ffmpeg_path"],
-                turbo=turbo,
-            )
+            download(manifest, config["ffmpeg_path"], turbo)
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
@@ -254,7 +246,11 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
             return config
 
 
-def download(manifest: Manifest, ffmpeg_path: str, turbo: bool):
+def download(
+    manifest: Manifest,
+    ffmpeg_path: str,
+    turbo: bool,
+):
     """
     지정된 해상도를 목표로 다운로드를 시작합니다 .
     만약 목표 해상도가 존재하지 않으면 최고 해상도로 다운로드합니다.
@@ -356,7 +352,10 @@ def check_ffmpeg_path(ffmpeg_path: str) -> bool:
 
 
 def download_parts(
-    progress: Progress, ffmpeg_path: str, manifest: Manifest, turbo: bool
+    progress: Progress,
+    ffmpeg_path: str,
+    manifest: Manifest,
+    turbo: bool,
 ) -> tuple[float, list[str]]:
     """
     지정된 Manifest의 각 구간을 다운로드합니다.
