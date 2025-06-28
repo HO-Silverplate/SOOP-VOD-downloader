@@ -44,8 +44,8 @@ def download_process(
         "-f",
         "mp4",
         "-v",
-        "quiet",
-        "-stats",
+        "error",
+        # "-stats",
         "-progress",
         "pipe:1",
     ]
@@ -60,13 +60,16 @@ def download_process(
         ffmpeg_cmd,
         stdin=sys.stdin,
         stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
+        stderr=sys.stderr,
         text=True,
     )
 
 
 def concat_process(
-    ffmpeg_path: str, export_path: str, part_list: list[str], turbo: bool = False
+    ffmpeg_path: str,
+    export_path: str,
+    part_list: list[str],
+    turbo: bool = False,
 ) -> subprocess.Popen:
     """
     병합 프로세스를 생성하고 반환합니다.
@@ -92,8 +95,8 @@ def concat_process(
         "0",
         "-y",
         "-v",
-        "quiet",
-        "-stats",
+        "error",
+        # "-stats",
         "-progress",
         "pipe:1",
         export_path,
@@ -107,6 +110,7 @@ def concat_process(
         concat_cmd,
         stdin=sys.stdin,
         stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
+        stderr=sys.stderr,
+        # stderr=subprocess.STDOUT,
         text=True,
     )
