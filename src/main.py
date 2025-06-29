@@ -32,6 +32,7 @@ HELP = [
 FFMPEG_ERR = [
     "FFmpeg 경로가 잘못되었습니다: {ffmpeg_path}\nFFmpeg를 설치하거나 올바른 경로를 지정해주세요.",
     "FFmpeg를 찾는 데 실패하였습니다.\nFFmpeg를 설치하거나 직접 경로를 지정해주세요.\n-c 옵션으로 설정 파일을 불러오거나 -f 옵션으로 경로를 직접 지정할 수 있습니다.",
+    "FFmpeg가 릴리즈 빌드가 아닙니다. 오류가 발생할 수 있습니다.",
 ]
 
 QUALITY_MAPPING = ["1440p", "1080p", "720p", "540p", "auto"]
@@ -101,18 +102,20 @@ def main(
         # Check if ffmpeg_path is valid
         # if unvalid, raise Exception with error message
         print()
-        if check_ffmpeg_path(ffmpeg_path):
-            if ffmpeg_changed and typer.confirm(
-                f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
-            ):
-                dump_config(config)
-        else:
-            msg = (
-                FFMPEG_ERR[0].format(ffmpeg_path=ffmpeg_path)
-                if use_config
-                else FFMPEG_ERR[1]
-            )
-            raise Exception(msg)
+        match check_ffmpeg_path(ffmpeg_path):
+            case 0:
+                msg = (
+                    FFMPEG_ERR[0].format(ffmpeg_path=ffmpeg_path)
+                    if use_config
+                    else FFMPEG_ERR[1]
+                )
+                raise Exception(msg)
+            case -1:
+                console.print(FFMPEG_ERR[2], style="yellow")
+        if ffmpeg_changed and typer.confirm(
+            f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
+        ):
+            dump_config(config)
 
         # If ffmpeg_path is set & valid, ask to overwrite config
 
@@ -332,12 +335,12 @@ def try_login(config: dict[str, str]) -> bool:
         return False
 
 
-def check_ffmpeg_path(ffmpeg_path: str) -> bool:
+def check_ffmpeg_path(ffmpeg_path: str) -> int:
     """
     FFmpeg 경로가 올바른지 확인합니다.
 
     :param str ffmpeg_path: FFmpeg 실행 파일의 경로
-    :return: FFmpeg가 설치되어 있고, 경로가 올바른 경우 True, 그렇지 않으면 False
+    :return code: FFmpeg가 설치되어 있을 경우 1, 그렇지 않으면 0, 설치되어 있지만 릴리즈 빌드가 아닐 경우 -1
     """
     try:
         result = subprocess.run(
@@ -346,7 +349,11 @@ def check_ffmpeg_path(ffmpeg_path: str) -> bool:
             text=True,
             check=True,
         )
-        return "ffmpeg" in result.stdout
+        if "ffmpeg" in result.stdout:
+            if "git" in result.stdout:
+                return -1
+            return 1
+        return 0
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
