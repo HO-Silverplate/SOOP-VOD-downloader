@@ -55,11 +55,12 @@ def download_process(
         ffmpeg_cmd.append("-threads")
         ffmpeg_cmd.append("0")
 
-    if int(version.split(".")[0]) >= 7 and int(version.split(".")[1]) >= 1:
-        ffmpeg_cmd.insert(1, "0")
-        ffmpeg_cmd.insert(1, "-extension_picky")
-        ffmpeg_cmd.insert(1, "ALL")
-        ffmpeg_cmd.insert(1, "-allowed_extensions")
+    if "git" not in version:
+        if int(version.split(".")[0]) >= 7 and int(version.split(".")[1]) >= 1:
+            ffmpeg_cmd.insert(1, "0")
+            ffmpeg_cmd.insert(1, "-extension_picky")
+            ffmpeg_cmd.insert(1, "ALL")
+            ffmpeg_cmd.insert(1, "-allowed_extensions")
 
     ffmpeg_cmd.append(path)
 
