@@ -35,6 +35,9 @@ soop_dl -q 720p
 soop_dl -c -q 720p -f '/path/to/ffmpeg.exe'
 # 설정 파일 사용, 목표해상도 720p, FFmpeg 경로 갱신하기 
 
+soop_dl -c -b batch.txt
+# 설정 파일 사용, 최고 품질, batch.txt에 기록된 파일부터 다운로드
+
 ```
 
 사용 가능한 옵션 플래그들은 `soop_dl -h`를 참고하세요.
