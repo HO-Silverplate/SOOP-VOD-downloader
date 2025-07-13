@@ -26,6 +26,7 @@ HELP = [
     "|  설정 파일을 사용합니다. \n\n|  설정 파일이 존재하지 않으면 새로 생성합니다.\n\n|",
     "|  출력에 사용되는 ffmpeg.exe의 경로를 지정합니다. \n\n|",
     "|  FFmpeg의 -threads 0 옵션을 사용합니다.\n\n|  CPU 사용량이 증가할 수 있습니다.\n\n|",
+    "|  배치 모드로 실행합니다. \n\n|  URL을 .txt 파일에서 읽어옵니다.\n\n|  파일 작성법은 README.md를 참고해 주세요.\n\n|",
 ]
 
 FFMPEG_ERR = [
@@ -64,6 +65,10 @@ def main(
         bool,
         typer.Option("-t", "--turbo", help=HELP[4], show_default=False, is_flag=True),
     ] = False,
+    batch: Annotated[
+        str,
+        typer.Option("-b", "--batch", help=HELP[5], show_default=False),
+    ] = "",
 ):
     console.print("프로그램을 강제종료하려면 Ctrl+C를 입력하세요.", style="yellow")
     if turbo:
@@ -140,14 +145,55 @@ def main(
             print()
             dump_config(config)
 
+        if batch.strip() != "":
+            if os.path.exists(batch):
+                urls = []
+                with open(batch, "r") as f:
+                    urls = [url.strip() for url in f.readlines() if url.strip()]
+
+                if len(urls) != 0:
+                    for url in urls:
+                        try:
+                            manifest = get_manifest_wrap(url, quality)
+                        except ValueError:
+                            console.print(f"ValueError: {e}", style="yellow")
+                            console.print(
+                                f"URL이 잘못되었습니다: {url}", style="yellow"
+                            )
+                            console.print("다음 URL로 계속합니다.", style="yellow")
+                            continue
+
+                        download(manifest, config["ffmpeg_path"], turbo)
+                    print()
+                    console.print("배치 다운로드가 완료되었습니다.")
+                else:
+                    console.print(
+                        "배치 파일이 비어 있습니다. URL을 추가해 주세요.",
+                        style="yellow",
+                    )
+
+                if not typer.confirm("일반 모드로 계속할까요?"):
+                    typer.Exit(code=0)
+                    return
+
+            else:
+                console.print(f"파일을 찾을 수 없습니다: {batch}", style="yellow")
+                console.print("배치 모드를 종료합니다.", style="yellow")
+                if not typer.confirm("일반 모드로 계속할까요?"):
+                    typer.Exit(code=0)
+                    return
+
         # main download loop
         print()
         while True:
-            download(
-                quality,
-                ffmpeg_path=config["ffmpeg_path"],
-                turbo=turbo,
-            )
+            try:
+                url = get_url_input()
+                manifest = get_manifest_wrap(url, quality)
+            except ValueError:
+                print()
+                continue
+
+            download(manifest, config["ffmpeg_path"], turbo)
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
@@ -175,7 +221,7 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
     설정 파일을 불러옵니다.
     설정 파일이 존재하지 않으면 새로 생성합니다.
 
-    :param default: 기본 설정 값이 담긴 딕셔너리
+    :param dict default: 기본 설정 값이 담긴 딕셔너리
     :return: 설정 파일에서 불러온 설정 값이 담긴 딕셔너리
     """
     print()
@@ -200,22 +246,20 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
             return config
 
 
-def download(quality: str, ffmpeg_path: str, turbo: bool):
+def download(
+    manifest: Manifest,
+    ffmpeg_path: str,
+    turbo: bool,
+):
     """
     지정된 해상도를 목표로 다운로드를 시작합니다 .
     만약 목표 해상도가 존재하지 않으면 최고 해상도로 다운로드합니다.
 
-    :param quality: 다운로드할 비디오의 목표 해상도
+    :param manifest: 다운로드할 매니페스트 객체
     :param ffmpeg_path: FFmpeg 실행 파일의 경로
     :param turbo: 고성능 모드 활성화 여부
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
-    try:
-        url = get_url_input()
-        manifest = get_manifest_wrap(url, quality)
-    except ValueError:
-        print()
-        return
 
     print()
     console.print(f"다운로드를 시작하는 중: ", style="yellow", end="")
@@ -241,15 +285,15 @@ def download(quality: str, ffmpeg_path: str, turbo: bool):
 
     console.print()
     console.print(f"다운로드가 완료되었습니다: ", style="green", end="")
-    console.print(path.replace("\\", "/"), end="\n\n")
+    console.print(path.replace("\\", "/"), end="\n")
 
 
 def get_credential_input(config: dict[str, str], changed: set) -> tuple[str, str]:
     """
     사용자로부터 로그인 정보를 입력받습니다.
 
-    :param config: 현재 설정을 담고 있는 딕셔너리
-    :param changed: 변경된 설정 항목을 담는 집합
+    :param dict config: 현재 설정을 담고 있는 딕셔너리
+    :param set changed: 변경된 설정 항목을 담는 집합
     :return: 업데이트된 설정 딕셔너리와 변경된 항목의 집합
     :raises KeyboardInterrupt: 사용자가 입력을 중단한 경우
     """
@@ -292,7 +336,7 @@ def check_ffmpeg_path(ffmpeg_path: str) -> bool:
     """
     FFmpeg 경로가 올바른지 확인합니다.
 
-    :param ffmpeg_path: FFmpeg 실행 파일의 경로
+    :param str ffmpeg_path: FFmpeg 실행 파일의 경로
     :return: FFmpeg가 설치되어 있고, 경로가 올바른 경우 True, 그렇지 않으면 False
     """
     try:
@@ -308,16 +352,19 @@ def check_ffmpeg_path(ffmpeg_path: str) -> bool:
 
 
 def download_parts(
-    progress: Progress, ffmpeg_path: str, manifest: Manifest, turbo: bool
+    progress: Progress,
+    ffmpeg_path: str,
+    manifest: Manifest,
+    turbo: bool,
 ) -> tuple[float, list[str]]:
     """
     지정된 Manifest의 각 구간을 다운로드합니다.
 
-    :param progress: Rich Progress 객체
-    :param ffmpeg_path: FFmpeg 실행 파일의 경로
-    :param manifest: 다운로드할 Manifest 객체
-    :param turbo: 고성능 모드 활성화 여부
-    :return: 다운로드된 구간의 총 길이 (밀리초 단위)와 임시 파일 목록
+    :param Progress progress: Rich Progress 객체
+    :param str ffmpeg_path: FFmpeg 실행 파일의 경로
+    :param Manifest manifest: 다운로드할 Manifest 객체
+    :param bool turbo: 고성능 모드 활성화 여부
+    :return out: 다운로드된 구간의 총 길이 (밀리초 단위)와 임시 파일 목록
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
     session = SOOP.session()
@@ -388,13 +435,13 @@ def concat_parts(
     """
     지정된 비디오 파트들을 병합하여 하나의 비디오 파일로 만듭니다.
 
-    :param progress: Rich Progress 객체
-    :param ffmpeg_path: FFmpeg 실행 파일의 경로
-    :param title: 최종 비디오 파일의 제목
-    :param turbo: 고성능 모드 활성화 여부
-    :param list: 병합할 비디오 파트들의 경로 리스트
-    :param total_duration: 전체 비디오의 총 길이 (밀리초 단위)
-    :return: 병합된 비디오 파일의 경로
+    :param Progress progress: Rich Progress 객체
+    :param str ffmpeg_path: FFmpeg 실행 파일의 경로
+    :param str title: 최종 비디오 파일의 제목
+    :param bool turbo: 고성능 모드 활성화 여부
+    :param list list: 병합할 비디오 파트들의 경로 리스트
+    :param float total_duration: 전체 비디오의 총 길이 (밀리초 단위)
+    :return path: 병합된 비디오 파일의 경로
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
     task = progress.add_task("영상 합치는 중...", total=total_duration)
@@ -435,8 +482,9 @@ def concat_parts(
 def remove_temp_files(progress: Progress, tmp_list: list[str]):
     """
     임시 파일을 제거합니다. 제거에 실패할 경우 경고 메시지를 출력하고, 사용자가 직접 제거하도록 안내합니다.
-    :param progress: Rich Progress 객체
-    :param tmp_list: 제거할 임시 파일 목록
+
+    :param Progress progress: Rich Progress 객체
+    :param list tmp_list: 제거할 임시 파일 목록
     """
     task = progress.add_task("임시 파일 정리 중...", total=len(tmp_list))
     try:
@@ -459,10 +507,11 @@ def get_url_input():
     """
     사용자로부터 다운로드할 VOD의 URL을 입력받습니다.
 
-    :return: 입력받은 URL
+    :return url: 입력받은 URL
     :raises KeyboardInterrupt: 사용자가 입력을 중단한 경우
     """
 
+    print()
     url = str(
         typer.prompt(
             "다운로드할 VOD의 URL을 입력하세요. (종료하려면 Enter)",
@@ -480,8 +529,8 @@ def get_manifest_wrap(url, quality):
     """
     Manifest를 가져오는 래퍼 함수입니다.
 
-    :param url: VOD의 player_url
-    :param quality: 원하는 비디오 품질 (예: "1080p", "auto")
+    :param str url: VOD의 player_url
+    :param str quality: 원하는 비디오 품질 (예: "1080p", "auto")
     :return: Manifest 객체
     """
     try:
@@ -492,7 +541,10 @@ def get_manifest_wrap(url, quality):
         raise e
     except KeyError as e:
         console.print(f"VOD 정보가 잘못되었습니다: {e}", style="red")
-        console.print("로그인 또는 성인인증 상태를 확인해주세요.", style="red")
+        console.print(
+            "존재하지 않는 VOD이거나, 접근권한이 없을 수 있습니다.", style="red"
+        )
+        console.print("로그인 상태와 본인인증 여부를 확인해 주세요.", style="red")
         raise Exception()
     except requests.exceptions.RequestException as e:
         console.print(f"정보를 불러오는 중 오류가 발생했습니다: {e}", style="red")
