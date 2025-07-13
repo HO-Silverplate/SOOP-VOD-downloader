@@ -11,6 +11,7 @@ def download_process(
     path: str,
     session: requests.Session | None = None,
     turbo: bool = False,
+    version: str = "7.1.1",
 ) -> subprocess.Popen:
     """
     다운로드 프로세스를 생성하여 반환합니다.
@@ -53,6 +54,12 @@ def download_process(
     if turbo:
         ffmpeg_cmd.append("-threads")
         ffmpeg_cmd.append("0")
+
+    if int(version.split(".")[0]) >= 7 and int(version.split(".")[1]) >= 1:
+        ffmpeg_cmd.insert(1, "0")
+        ffmpeg_cmd.insert(1, "-extension_picky")
+        ffmpeg_cmd.insert(1, "ALL")
+        ffmpeg_cmd.insert(1, "-allowed_extensions")
 
     ffmpeg_cmd.append(path)
 

@@ -32,6 +32,7 @@ HELP = [
 FFMPEG_ERR = [
     "FFmpeg 경로가 잘못되었습니다: {ffmpeg_path}\nFFmpeg를 설치하거나 올바른 경로를 지정해주세요.",
     "FFmpeg를 찾는 데 실패하였습니다.\nFFmpeg를 설치하거나 직접 경로를 지정해주세요.\n-c 옵션으로 설정 파일을 불러오거나 -f 옵션으로 경로를 직접 지정할 수 있습니다.",
+    "FFmpeg가 릴리즈 빌드가 아닙니다. 오류가 발생할 수 있습니다.",
 ]
 
 QUALITY_MAPPING = ["1440p", "1080p", "720p", "540p", "auto"]
@@ -101,18 +102,21 @@ def main(
         # Check if ffmpeg_path is valid
         # if unvalid, raise Exception with error message
         print()
-        if check_ffmpeg_path(ffmpeg_path):
-            if ffmpeg_changed and typer.confirm(
-                f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
-            ):
-                dump_config(config)
-        else:
+        try:
+            version = check_ffmpeg_path(ffmpeg_path)
+            if "git" in version:
+                console.print(FFMPEG_ERR[2], style="yellow")
+        except ValueError:
             msg = (
                 FFMPEG_ERR[0].format(ffmpeg_path=ffmpeg_path)
-                if use_config
+                if use_config or ffmpeg_changed
                 else FFMPEG_ERR[1]
             )
             raise Exception(msg)
+        if ffmpeg_changed and typer.confirm(
+            f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
+        ):
+            dump_config(config)
 
         # If ffmpeg_path is set & valid, ask to overwrite config
 
@@ -163,7 +167,7 @@ def main(
                             console.print("다음 URL로 계속합니다.", style="yellow")
                             continue
 
-                        download(manifest, config["ffmpeg_path"], turbo)
+                        download(manifest, config["ffmpeg_path"], turbo, version)
                     print()
                     console.print("배치 다운로드가 완료되었습니다.")
                 else:
@@ -193,7 +197,7 @@ def main(
                 print()
                 continue
 
-            download(manifest, config["ffmpeg_path"], turbo)
+            download(manifest, config["ffmpeg_path"], turbo, version)
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
@@ -250,6 +254,7 @@ def download(
     manifest: Manifest,
     ffmpeg_path: str,
     turbo: bool,
+    version: str = "7.1.1",
 ):
     """
     지정된 해상도를 목표로 다운로드를 시작합니다 .
@@ -258,6 +263,7 @@ def download(
     :param manifest: 다운로드할 매니페스트 객체
     :param ffmpeg_path: FFmpeg 실행 파일의 경로
     :param turbo: 고성능 모드 활성화 여부
+    :param version: FFmpeg 버전 (기본값: "7.1.1")
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
 
@@ -268,7 +274,7 @@ def download(
 
     with Progress() as progress:
         total_duration, tmp_list = download_parts(
-            progress, ffmpeg_path, manifest, turbo
+            progress, ffmpeg_path, manifest, turbo, version
         )
 
         path = concat_parts(
@@ -332,12 +338,13 @@ def try_login(config: dict[str, str]) -> bool:
         return False
 
 
-def check_ffmpeg_path(ffmpeg_path: str) -> bool:
+def check_ffmpeg_path(ffmpeg_path: str) -> int:
     """
     FFmpeg 경로가 올바른지 확인합니다.
 
     :param str ffmpeg_path: FFmpeg 실행 파일의 경로
-    :return: FFmpeg가 설치되어 있고, 경로가 올바른 경우 True, 그렇지 않으면 False
+    :return version: FFmpeg가 설치되어 있을 경우 빌드의 버전을 반환합니다. FFmpeg가 설치되어 있지 않거나 경로가 잘못된 경우 NULL을 반환합니다.
+    :raises ValueError: FFmpeg가 설치되어 있지 않거나 경로가 잘못된 경우
     """
     try:
         result = subprocess.run(
@@ -346,9 +353,15 @@ def check_ffmpeg_path(ffmpeg_path: str) -> bool:
             text=True,
             check=True,
         )
-        return "ffmpeg" in result.stdout
+        version_info = result.stdout.split("\n")[0]
+        if "ffmpeg" in version_info:
+            if "git" in version_info:
+                return version_info.split(" ")[2]
+            return version_info.split(" ")[2].split("-")[0]
+        else:
+            raise ValueError
     except (FileNotFoundError, subprocess.CalledProcessError):
-        return False
+        raise ValueError
 
 
 def download_parts(
@@ -356,6 +369,7 @@ def download_parts(
     ffmpeg_path: str,
     manifest: Manifest,
     turbo: bool,
+    version: str = "7.1.1",
 ) -> tuple[float, list[str]]:
     """
     지정된 Manifest의 각 구간을 다운로드합니다.
@@ -364,6 +378,7 @@ def download_parts(
     :param str ffmpeg_path: FFmpeg 실행 파일의 경로
     :param Manifest manifest: 다운로드할 Manifest 객체
     :param bool turbo: 고성능 모드 활성화 여부
+    :param str version: FFmpeg 버전 (기본값: "7.1.1")
     :return out: 다운로드된 구간의 총 길이 (밀리초 단위)와 임시 파일 목록
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
@@ -387,7 +402,7 @@ def download_parts(
             f"{i}/{total_parts}구간 다운로드 중...", total=duration
         )
         _proc = download_process(
-            ffmpeg_path, url, tmp_path, session=session, turbo=turbo
+            ffmpeg_path, url, tmp_path, session=session, turbo=turbo, version=version
         )
 
         for out_time in util.read_out_time(_proc):
