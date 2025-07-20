@@ -14,6 +14,7 @@ SOOP VOD를 다운로드하는 유틸리티 프로그램입니다.
 ## Prerequisites
 
 - `FFmpeg`
+>`FFmpeg` 마스터 브랜치 빌드는 오류가 발생할 수 있으니 꼭 릴리즈 빌드를 사용해 주시기 바랍니다.   
 
 ## 실행파일로 사용하기
 
@@ -33,6 +34,9 @@ soop_dl -q 720p
 
 soop_dl -c -q 720p -f '/path/to/ffmpeg.exe'
 # 설정 파일 사용, 목표해상도 720p, FFmpeg 경로 갱신하기 
+
+soop_dl -c -b batch.txt
+# 설정 파일 사용, 최고 품질, batch.txt에 기록된 파일부터 다운로드
 
 ```
 
