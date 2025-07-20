@@ -420,7 +420,7 @@ def download_parts(
                 "구간 다운로드 중 오류가 발생하였습니다. FFmpeg 경로가 올바른지 확인해 주세요."
             )
 
-        if progress._tasks[task].completed < duration - 1:
+        if progress._tasks[task].completed < duration - 20:
             progress.update(
                 task,
                 description=f"{i}/{total_parts}구간 다운로드 중단",
