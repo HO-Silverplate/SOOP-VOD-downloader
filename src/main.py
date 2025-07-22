@@ -29,13 +29,29 @@ HELP = [
     "|  배치 모드로 실행합니다. \n\n|  URL을 .txt 파일에서 읽어옵니다.\n\n|  파일 작성법은 README.md를 참고해 주세요.\n\n|",
 ]
 
+NOTICE = [
+    "프로그램을 강제종료하려면 Ctrl+C를 입력하세요.",
+    "고성능 모드가 활성화되었습니다.",
+    "지원하지 않는 품질입니다.\n지원하는 품질: {QUALITY}\n자동으로 최고 품질로 설정합니다.",
+]
+
+QUESTION = [
+    "FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?",
+    "로그인하시겠습니까?",
+    "로그인을 다시 시도할까요?",
+    "설정을 저장할까요? 다음과 같은 설정이 변경되었습니다: {changed}",
+    "일반 모드로 계속할까요?",
+]
+
 FFMPEG_ERR = [
     "FFmpeg 경로가 잘못되었습니다: {ffmpeg_path}\nFFmpeg를 설치하거나 올바른 경로를 지정해주세요.",
     "FFmpeg를 찾는 데 실패하였습니다.\nFFmpeg를 설치하거나 직접 경로를 지정해주세요.\n-c 옵션으로 설정 파일을 불러오거나 -f 옵션으로 경로를 직접 지정할 수 있습니다.",
     "FFmpeg가 릴리즈 빌드가 아닙니다. 오류가 발생할 수 있습니다.",
 ]
 
+
 QUALITY_MAPPING = ["1440p", "1080p", "720p", "540p", "auto"]
+QUIT = ["프로그램이 중단되었습니다.", "프로그램을 종료합니다."]
 
 console = Console()
 app = typer.Typer(
@@ -71,18 +87,17 @@ def main(
         typer.Option("-b", "--batch", help=HELP[5], show_default=False),
     ] = "",
 ):
-    console.print("프로그램을 강제종료하려면 Ctrl+C를 입력하세요.", style="yellow")
+    console.print(NOTICE[0], style="yellow")
     if turbo:
-        console.print("고성능 모드가 활성화되었습니다.", style="magenta")
+        console.print(NOTICE[1], style="magenta")
 
     # Basic Config & ffmpeg flag
     quality = quality.strip().lower()
     if quality not in QUALITY_MAPPING:
         console.print(
-            f"지원하지 않는 품질입니다.\n지원하는 품질: {QUALITY_MAPPING}",
+            NOTICE[2].format(QUALITY=QUALITY_MAPPING),
             style="yellow",
         )
-        console.print("자동으로 최고 품질로 설정합니다.", style="yellow")
 
     ffmpeg_path = ffmpeg_path.strip().replace("\\", "/")
     ffmpeg_changed = ffmpeg_path != "ffmpeg"
@@ -113,9 +128,7 @@ def main(
                 else FFMPEG_ERR[1]
             )
             raise Exception(msg)
-        if ffmpeg_changed and typer.confirm(
-            f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
-        ):
+        if ffmpeg_changed and typer.confirm(QUESTION[0]):
             dump_config(config)
 
         # If ffmpeg_path is set & valid, ask to overwrite config
@@ -125,7 +138,7 @@ def main(
         # If not, ask for login credentials
         # when login fails, ask for retry
         changed = set()
-        if typer.confirm("로그인하시겠습니까?"):
+        if typer.confirm(QUESTION[1]):
             print()
             if use_config:
                 res = try_login(config)
@@ -133,7 +146,7 @@ def main(
                 config, changed = get_credential_input(config, changed)
                 res = try_login(config)
                 print()
-            while not res and typer.confirm("로그인을 다시 시도할까요?"):
+            while not res and typer.confirm(QUESTION[2]):
                 print()
                 config, changed = get_credential_input(config, changed)
                 res = try_login(config)
@@ -143,9 +156,7 @@ def main(
 
         # If Login was successful & Auth params changed, ask to save config
         __flag = res and (len(changed) > 0)
-        if __flag and typer.confirm(
-            f"설정을 저장할까요? 다음과 같은 설정이 변경되었습니다: {', '.join(changed)}"
-        ):
+        if __flag and typer.confirm(QUESTION[3].format(changed=", ".join(changed))):
             print()
             dump_config(config)
 
@@ -176,14 +187,14 @@ def main(
                         style="yellow",
                     )
 
-                if not typer.confirm("일반 모드로 계속할까요?"):
+                if not typer.confirm(QUESTION[4]):
                     typer.Exit(code=0)
                     return
 
             else:
                 console.print(f"파일을 찾을 수 없습니다: {batch}", style="yellow")
                 console.print("배치 모드를 종료합니다.", style="yellow")
-                if not typer.confirm("일반 모드로 계속할까요?"):
+                if not typer.confirm(QUESTION[4]):
                     typer.Exit(code=0)
                     return
 
@@ -201,14 +212,14 @@ def main(
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
-        console.print("프로그램이 중단되었습니다.", style="blue")
+        console.print(QUIT[0], style="blue")
         typer.Exit(code=0)
         return
 
     # If any exception occurs, print the error message and exit
     except Exception as e:
         console.print(f"{e}", style="red")
-        console.print("프로그램을 종료합니다.", style="red")
+        console.print(QUIT[1], style="red")
         typer.Exit(code=1)
         return
 
