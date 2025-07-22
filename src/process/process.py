@@ -103,6 +103,8 @@ def concat_process(
         "-y",
         "-v",
         "error",
+        "-movflags",
+        "faststart",
         # "-stats",
         "-progress",
         "pipe:1",
