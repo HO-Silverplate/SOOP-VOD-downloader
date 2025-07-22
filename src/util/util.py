@@ -46,3 +46,28 @@ def read_out_time(proc: subprocess.Popen) -> Generator[int, None, None]:
         elif line.startswith("progress") and "end" in line:
             yield -1
             break
+
+
+def get_duration_ms(input_path, ffprobe_path="ffprobe") -> int:
+    try:
+        result = subprocess.run(
+            [
+                ffprobe_path,
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                input_path,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        seconds = float(result.stdout.strip())
+    except:
+        return None
+    return int(seconds * 1000)

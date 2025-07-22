@@ -412,6 +412,17 @@ def download_parts(
 
         total_duration += progress._tasks[task].completed
         _proc.wait()
+        if ffmpeg_path != "ffmpeg":
+            ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path), "ffprobe")
+            if not os.path.exists(ffprobe_path):
+                ffprobe_path = None
+        else:
+            ffprobe_path = "ffprobe"
+
+        vid_len = (
+            util.get_duration_ms(tmp_path, ffprobe_path)
+            or progress._tasks[task].completed
+        )
         if _proc.returncode != 0:
             progress.update(
                 task, description=f"{i}/{total_parts}구간 다운로드 중단", refresh=False
@@ -420,7 +431,7 @@ def download_parts(
                 "구간 다운로드 중 오류가 발생하였습니다. FFmpeg 경로가 올바른지 확인해 주세요."
             )
 
-        if progress._tasks[task].completed < duration - 20:
+        if vid_len < duration - 160:
             progress.update(
                 task,
                 description=f"{i}/{total_parts}구간 다운로드 중단",
