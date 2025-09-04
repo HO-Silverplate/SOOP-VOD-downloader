@@ -130,13 +130,15 @@ def main(
             if use_config:
                 res = try_login(config)
             else:
-                config, changed = get_credential_input(config, changed)
+                config, _changed = get_credential_input(config)
                 res = try_login(config)
-                print()
+                changed.update(_changed)
+
+            print()
             while not res and typer.confirm("로그인을 다시 시도할까요?"):
-                print()
-                config, changed = get_credential_input(config, changed)
+                config, _changed = get_credential_input(config)
                 res = try_login(config)
+                changed.update(_changed)
                 print()
         else:
             res = SOOP.check_auth()
@@ -295,15 +297,16 @@ def download(
     console.print(path.replace("\\", "/"), end="\n")
 
 
-def get_credential_input(config: dict[str, str], changed: set) -> tuple[str, str]:
+def get_credential_input(config: dict[str, str]) -> tuple[str, set[str]]:
     """
     사용자로부터 로그인 정보를 입력받습니다.
 
     :param dict config: 현재 설정을 담고 있는 딕셔너리
-    :param set changed: 변경된 설정 항목을 담는 집합
     :return: 업데이트된 설정 딕셔너리와 변경된 항목의 집합
     :raises KeyboardInterrupt: 사용자가 입력을 중단한 경우
     """
+    changed = set()
+
     prev_conf = copy.deepcopy(config)
 
     config["username"] = typer.prompt("아이디")
