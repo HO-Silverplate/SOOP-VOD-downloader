@@ -97,10 +97,10 @@ def main(
         # Load & overwrite config if given -c Flag
         if use_config:
             config = handle_config(config)
-            ffmpeg_path = config["ffmpeg_path"]
+            ffmpeg_path = config.get("ffmpeg_path")
 
         # Check if ffmpeg_path is valid
-        # if unvalid, raise Exception with error message
+        # if invalid, raise Exception with error message
         print()
         try:
             version = check_ffmpeg_path(ffmpeg_path)
@@ -113,12 +113,11 @@ def main(
                 else FFMPEG_ERR[1]
             )
             raise Exception(msg)
+        # If ffmpeg_path is set & valid, ask to overwrite config
         if ffmpeg_changed and typer.confirm(
             f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
         ):
             dump_config(config)
-
-        # If ffmpeg_path is set & valid, ask to overwrite config
 
         # handle login
         # If use_config is True, try to login with config
@@ -558,7 +557,7 @@ def get_url_input(quality_d: str | None = "auto"):
         return url, quality_d
 
 
-def get_manifest_wrap(url, quality):
+def get_manifest_wrap(url: str, quality: str) -> Manifest:
     """
     Manifest를 가져오는 래퍼 함수입니다.
 
@@ -578,11 +577,11 @@ def get_manifest_wrap(url, quality):
             "존재하지 않는 VOD이거나, 접근권한이 없을 수 있습니다.", style="red"
         )
         console.print("로그인 상태와 본인인증 여부를 확인해 주세요.", style="red")
-        raise Exception()
+        raise e
     except requests.exceptions.RequestException as e:
         console.print(f"정보를 불러오는 중 오류가 발생했습니다: {e}", style="red")
         console.print("네트워크 연결을 확인해주세요.", style="red")
-        raise Exception()
+        raise e
 
 
 if __name__ == "__main__":
