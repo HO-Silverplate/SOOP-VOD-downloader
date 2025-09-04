@@ -155,14 +155,14 @@ def main(
 
         # main download loop
         while True:
+            url, quality = get_url_input(quality)
             try:
-                url = get_url_input()
                 manifest = get_manifest_wrap(url, quality)
-            except ValueError:
+            except:
                 print()
                 continue
 
-            download(manifest, config["ffmpeg_path"], turbo, version)
+            download(manifest, ffmpeg_path, turbo, version)
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
@@ -530,7 +530,7 @@ def remove_temp_files(progress: Progress, tmp_list: list[str]):
         console.print("/tmp 폴더의 임시 파일을 직접 제거해 주세요.", style="yellow")
 
 
-def get_url_input():
+def get_url_input(quality_d: str | None = "auto"):
     """
     사용자로부터 다운로드할 VOD의 URL을 입력받습니다.
 
@@ -541,15 +541,18 @@ def get_url_input():
     print()
     url = str(
         typer.prompt(
-            "다운로드할 VOD의 URL을 입력하세요. (종료하려면 Enter)",
+            "다운로드할 VOD의 URL과 희망하는 품질(선택)을 입력하세요. (종료하려면 Enter)",
             default="",
             show_default=False,
         )
     ).strip()
     if url == "":
         raise KeyboardInterrupt
+
+    if len(url.split()) > 1 and url.split()[1] in QUALITY_MAPPING:
+        return url.split()[0], url.split()[1]
     else:
-        return url
+        return url, quality_d
 
 
 def get_manifest_wrap(url, quality):
