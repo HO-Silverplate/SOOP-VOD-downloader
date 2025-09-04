@@ -551,10 +551,17 @@ def get_url_input(quality_d: str | None = "auto"):
     if url == "":
         raise KeyboardInterrupt
 
-    if len(url.split()) > 1 and url.split()[1] in QUALITY_MAPPING:
-        return url.split()[0], url.split()[1]
-    else:
+    if len(url.split(), 1) < 2:
         return url, quality_d
+
+    if url.split()[1] in QUALITY_MAPPING:
+        return url.split()[0], url.split()[1]
+
+    console.print(
+        f"지원하지 않는 품질입니다.\n지원하는 품질: {QUALITY_MAPPING}",
+        style="yellow",
+    )
+    return url.split()[0], quality_d
 
 
 def get_manifest_wrap(url: str, quality: str) -> Manifest:
