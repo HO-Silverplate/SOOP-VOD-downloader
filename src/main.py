@@ -146,49 +146,14 @@ def main(
         if __flag and typer.confirm(
             f"설정을 저장할까요? 다음과 같은 설정이 변경되었습니다: {', '.join(changed)}"
         ):
-            print()
             dump_config(config)
 
         if batch.strip() != "":
-            if os.path.exists(batch):
-                urls = []
-                with open(batch, "r") as f:
-                    urls = [url.strip() for url in f.readlines() if url.strip()]
+            handle_batch(batch, quality, ffmpeg_path, turbo, version)
 
-                if len(urls) != 0:
-                    for url in urls:
-                        try:
-                            manifest = get_manifest_wrap(url, quality)
-                        except ValueError:
-                            console.print(f"ValueError: {e}", style="yellow")
-                            console.print(
-                                f"URL이 잘못되었습니다: {url}", style="yellow"
-                            )
-                            console.print("다음 URL로 계속합니다.", style="yellow")
-                            continue
-
-                        download(manifest, config["ffmpeg_path"], turbo, version)
-                    print()
-                    console.print("배치 다운로드가 완료되었습니다.")
-                else:
-                    console.print(
-                        "배치 파일이 비어 있습니다. URL을 추가해 주세요.",
-                        style="yellow",
-                    )
-
-                if not typer.confirm("일반 모드로 계속할까요?"):
-                    typer.Exit(code=0)
-                    return
-
-            else:
-                console.print(f"파일을 찾을 수 없습니다: {batch}", style="yellow")
-                console.print("배치 모드를 종료합니다.", style="yellow")
-                if not typer.confirm("일반 모드로 계속할까요?"):
-                    typer.Exit(code=0)
-                    return
+        print()
 
         # main download loop
-        print()
         while True:
             try:
                 url = get_url_input()
@@ -211,6 +176,42 @@ def main(
         console.print("프로그램을 종료합니다.", style="red")
         typer.Exit(code=1)
         return
+
+
+def handle_batch(
+    batch: str, quality: str, ffmpeg: str, turbo: bool, version: str
+) -> bool:
+    if not os.path.exists(batch):
+        console.print(f"파일을 찾을 수 없습니다: {batch}", style="yellow")
+        console.print("배치 모드를 종료합니다.", style="yellow")
+        if not typer.confirm("일반 모드로 계속할까요?"):
+            typer.Exit(code=0)
+            return
+
+    urls = []
+    with open(batch, "r") as f:
+        urls = [url.strip() for url in f.readlines() if url.strip()]
+
+    if len(urls) == 0:
+        console.print(
+            "배치 파일이 비어 있습니다. URL을 추가해 주세요.",
+            style="yellow",
+        )
+    else:
+        for url in urls:
+            try:
+                manifest = get_manifest_wrap(url, quality)
+            except ValueError as e:
+                console.print(f"ValueError: {e}", style="yellow")
+                console.print(f"URL이 잘못되었습니다: {url}", style="yellow")
+                console.print("다음 URL로 계속합니다.", style="yellow")
+                continue
+
+            download(manifest, ffmpeg, turbo, version)
+        print()
+        console.print("배치 다운로드가 완료되었습니다.")
+
+    return typer.confirm("일반 모드로 계속할까요?")
 
 
 def dump_config(config: dict[str, str]) -> None:
