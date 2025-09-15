@@ -551,7 +551,7 @@ def get_url_input(quality_d: str | None = "auto"):
     if url == "":
         raise KeyboardInterrupt
 
-    if len(url.split(), 1) < 2:
+    if len(url.split(maxsplit=1)) < 2:
         return url, quality_d
 
     if url.split()[1] in QUALITY_MAPPING:
