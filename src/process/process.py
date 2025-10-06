@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-import tempfile
+from time import time
 import requests
 
 
@@ -82,12 +82,10 @@ def concat_process(
     """
     병합 프로세스를 생성하고 반환합니다.
     """
-    with tempfile.NamedTemporaryFile(
-        mode="w", delete=False, suffix=".txt", encoding="utf-8"
-    ) as tmp:
+    tmp_path = os.path.join(os.getcwd(), "tmp", f"list_{time()}.txt")
+    with open(tmp_path, "w", encoding="utf-8") as tmp:
         for part in part_list:
             tmp.write(f"file '{part}'\n")
-        tmp_path = tmp.name
 
     concat_cmd = [
         ffmpeg_path,

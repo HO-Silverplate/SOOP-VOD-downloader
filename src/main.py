@@ -1,4 +1,5 @@
 import copy
+import shutil
 from typing import Annotated
 from rich.progress import Progress
 from rich.console import Console
@@ -177,6 +178,11 @@ def main(
         console.print("프로그램을 종료합니다.", style="red")
         typer.Exit(code=1)
         return
+
+    finally:
+        os.path.exists(os.path.join(os.getcwd(), "tmp")) and shutil.rmtree(
+            os.path.join(os.getcwd(), "tmp")
+        )
 
 
 def handle_batch(
