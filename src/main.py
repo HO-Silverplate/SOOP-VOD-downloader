@@ -397,13 +397,14 @@ def download_parts(
     total_duration = 0.0
     tmp_list = []
 
+    def _hash(str: str) -> str:
+        return abs(hash(str)) % (10**8)
+
     for url, duration in manifest.items:
         i += 1
         tmp_list.append(
             tmp_path := util.get_unique_filename(
-                os.path.join(
-                    os.getcwd(), "tmp", f"{util.delete_spec_char(manifest.title)}.mp4"
-                )
+                os.path.join(os.getcwd(), "tmp", f"{_hash(manifest.title)}.mp4")
             )
         )
 
