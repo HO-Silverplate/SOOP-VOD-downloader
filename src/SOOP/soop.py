@@ -1,10 +1,10 @@
 import requests
 from src.model import Types, Manifest
 
-VOD_API = "https://api.m.sooplive.co.kr/station/video/a/view"
-LOGIN_API = "https://login.sooplive.co.kr/app/LoginAction.php"
-LOGOUT_API = "https://login.sooplive.co.kr/app/LogOut.php"
-CHECK_API = "https://afevent2.sooplive.co.kr/api/get_private_info.php"
+VOD_API = "https://api.m.sooplive.com/station/video/a/view"
+LOGIN_API = "https://login.sooplive.com/app/LoginAction.php"
+LOGOUT_API = "https://login.sooplive.com/app/LogOut.php"
+CHECK_API = "https://afevent2.sooplive.com/api/get_private_info.php"
 
 QUALITY_MAPPING = {
     "1440p": 5,
@@ -15,8 +15,8 @@ QUALITY_MAPPING = {
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-    "Referer": "https://play.sooplive.co.kr/",
-    "Origin": "https://play.sooplive.co.kr",
+    "Referer": "https://play.sooplive.com/",
+    "Origin": "https://play.sooplive.com",
 }
 
 # Login Status
