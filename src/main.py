@@ -63,18 +63,12 @@ def main(
         str,
         typer.Option("-f", "--ffmpeg", help=HELP[3], show_default=False),
     ] = "ffmpeg",
-    turbo: Annotated[
-        bool,
-        typer.Option("-t", "--turbo", help=HELP[4], show_default=False, is_flag=True),
-    ] = False,
     batch: Annotated[
         str,
         typer.Option("-b", "--batch", help=HELP[5], show_default=False),
     ] = "",
 ):
     console.print("프로그램을 강제종료하려면 Ctrl+C를 입력하세요.", style="yellow")
-    if turbo:
-        console.print("고성능 모드가 활성화되었습니다.", style="magenta")
 
     # Basic Config & ffmpeg flag
     quality = quality.strip().lower()
@@ -151,7 +145,7 @@ def main(
             dump_config(config)
 
         if batch.strip() != "":
-            handle_batch(batch, quality, ffmpeg_path, turbo, version)
+            handle_batch(batch, quality, ffmpeg_path, version)
 
         print()
 
@@ -164,7 +158,7 @@ def main(
                 print()
                 continue
 
-            download(manifest, ffmpeg_path, turbo, version)
+            download(manifest, ffmpeg_path, version)
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
@@ -185,9 +179,7 @@ def main(
         )
 
 
-def handle_batch(
-    batch: str, quality: str, ffmpeg: str, turbo: bool, version: str
-) -> bool:
+def handle_batch(batch: str, quality: str, ffmpeg: str, version: str) -> bool:
     if not os.path.exists(batch):
         console.print(f"파일을 찾을 수 없습니다: {batch}", style="yellow")
         console.print("배치 모드를 종료합니다.", style="yellow")
@@ -214,7 +206,7 @@ def handle_batch(
                 console.print("다음 URL로 계속합니다.", style="yellow")
                 continue
 
-            download(manifest, ffmpeg, turbo, version)
+            download(manifest, ffmpeg, version)
         print()
         console.print("배치 다운로드가 완료되었습니다.")
 
@@ -261,7 +253,6 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
 def download(
     manifest: Manifest,
     ffmpeg_path: str,
-    turbo: bool,
     version: str = "7.1.1",
 ):
     """
@@ -270,7 +261,6 @@ def download(
 
     :param manifest: 다운로드할 매니페스트 객체
     :param ffmpeg_path: FFmpeg 실행 파일의 경로
-    :param turbo: 고성능 모드 활성화 여부
     :param version: FFmpeg 버전 (기본값: "7.1.1")
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
@@ -282,14 +272,13 @@ def download(
 
     with Progress() as progress:
         total_duration, tmp_list = download_parts(
-            progress, ffmpeg_path, manifest, turbo, version
+            progress, ffmpeg_path, manifest, version
         )
 
         path = concat_parts(
             progress,
             ffmpeg_path,
             manifest.title,
-            turbo,
             tmp_list,
             total_duration,
         )
@@ -377,7 +366,6 @@ def download_parts(
     progress: Progress,
     ffmpeg_path: str,
     manifest: Manifest,
-    turbo: bool,
     version: str = "7.1.1",
 ) -> tuple[float, list[str]]:
     """
@@ -386,7 +374,6 @@ def download_parts(
     :param Progress progress: Rich Progress 객체
     :param str ffmpeg_path: FFmpeg 실행 파일의 경로
     :param Manifest manifest: 다운로드할 Manifest 객체
-    :param bool turbo: 고성능 모드 활성화 여부
     :param str version: FFmpeg 버전 (기본값: "7.1.1")
     :return out: 다운로드된 구간의 총 길이 (밀리초 단위)와 임시 파일 목록
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
@@ -412,7 +399,7 @@ def download_parts(
             f"{i}/{total_parts}구간 다운로드 중...", total=duration
         )
         _proc = download_process(
-            ffmpeg_path, url, tmp_path, session=session, turbo=turbo, version=version
+            ffmpeg_path, url, tmp_path, session=session, version=version
         )
 
         for out_time in util.read_out_time(_proc):
@@ -464,8 +451,7 @@ def concat_parts(
     progress: Progress,
     ffmpeg_path: str,
     title: str,
-    turbo: bool,
-    list: list[str],
+    parts: list[str],
     total_duration: float = 0.0,
 ) -> str:
     """
@@ -474,8 +460,7 @@ def concat_parts(
     :param Progress progress: Rich Progress 객체
     :param str ffmpeg_path: FFmpeg 실행 파일의 경로
     :param str title: 최종 비디오 파일의 제목
-    :param bool turbo: 고성능 모드 활성화 여부
-    :param list list: 병합할 비디오 파트들의 경로 리스트
+    :param list parts: 병합할 비디오 파트들의 경로 리스트
     :param float total_duration: 전체 비디오의 총 길이 (밀리초 단위)
     :return path: 병합된 비디오 파일의 경로
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
@@ -486,7 +471,9 @@ def concat_parts(
     )
 
     try:
-        _proc = concat_process(ffmpeg_path, path, list, turbo=turbo)
+        _proc = concat_process(
+            ffmpeg_path, path, list(map(lambda x: x.replace("\\", "/"), parts))
+        )
     except Exception as e:
         raise ProcessError("영상을 병합하는 중 오류가 발생하였습니다.")
 
