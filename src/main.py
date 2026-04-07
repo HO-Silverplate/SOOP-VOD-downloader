@@ -11,6 +11,7 @@ import subprocess
 
 from src.process import download_process, concat_process
 from src.util import util
+from src.util.i18n import set_language, t
 from src.SOOP import SOOP, LoginError
 from src.model import Manifest
 
@@ -21,22 +22,9 @@ class ProcessError(Exception):
     """
 
 
-HELP = [
-    "SOOP VOD를 다운로드할 수 있는 유틸리티입니다.",
-    "|  목표 비디오 품질을 설정합니다.\n\n|  목표하는 품질이 존재하지 않을 경우 최고 품질로 다운로드합니다.\n\n|  Options: 1440p, 1080p, 720p, 540p, auto\n\n|",
-    "|  설정 파일을 사용합니다. \n\n|  설정 파일이 존재하지 않으면 새로 생성합니다.\n\n|",
-    "|  출력에 사용되는 ffmpeg.exe의 경로를 지정합니다. \n\n|",
-    "|  FFmpeg의 -threads 0 옵션을 사용합니다.\n\n|  CPU 사용량이 증가할 수 있습니다.\n\n|",
-    "|  배치 모드로 실행합니다. \n\n|  URL을 .txt 파일에서 읽어옵니다.\n\n|  파일 작성법은 README.md를 참고해 주세요.\n\n|",
-]
-
-FFMPEG_ERR = [
-    "FFmpeg 경로가 잘못되었습니다: {ffmpeg_path}\nFFmpeg를 설치하거나 올바른 경로를 지정해주세요.",
-    "FFmpeg를 찾는 데 실패하였습니다.\nFFmpeg를 설치하거나 직접 경로를 지정해주세요.\n-c 옵션으로 설정 파일을 불러오거나 -f 옵션으로 경로를 직접 지정할 수 있습니다.",
-    "FFmpeg가 릴리즈 빌드가 아닙니다. 오류가 발생할 수 있습니다.",
-]
-
 QUALITY_MAPPING = ["1440p", "1080p", "720p", "540p", "auto"]
+CONFIG_FILENAME = "config.json"
+TMP_DIRNAME = "tmp"
 
 console = Console()
 app = typer.Typer(
@@ -53,22 +41,25 @@ def get_app() -> typer.Typer:
 def main(
     quality: Annotated[
         str,
-        typer.Option("-q", "--quality", help=HELP[1], show_default=False),
+        typer.Option("-q", "--quality", help=t("help.quality"), show_default=False),
     ] = "auto",
     use_config: Annotated[
         bool,
-        typer.Option("-c", "--config", help=HELP[2], show_default=False, is_flag=True),
+        typer.Option(
+            "-c", "--config", help=t("help.config"), show_default=False, is_flag=True
+        ),
     ] = False,
     ffmpeg_path: Annotated[
         str,
-        typer.Option("-f", "--ffmpeg", help=HELP[3], show_default=False),
+        typer.Option("-f", "--ffmpeg", help=t("help.ffmpeg"), show_default=False),
     ] = "ffmpeg",
     batch: Annotated[
         str,
-        typer.Option("-b", "--batch", help=HELP[5], show_default=False),
+        typer.Option("-b", "--batch", help=t("help.batch"), show_default=False),
     ] = "",
 ):
-    console.print("프로그램을 강제종료하려면 Ctrl+C를 입력하세요.", style="yellow")
+    set_language(language or None)
+    say("cli.force_quit", style="yellow")
 
     # Basic Config & ffmpeg flag
     quality = quality.strip().lower()
@@ -94,24 +85,19 @@ def main(
             config = handle_config(config)
             ffmpeg_path = config.get("ffmpeg_path")
 
-        # Check if ffmpeg_path is valid
-        # if invalid, raise Exception with error message
-        print()
         try:
             version = check_ffmpeg_path(ffmpeg_path)
             if "git" in version:
-                console.print(FFMPEG_ERR[2], style="yellow")
+                say("ffmpeg.not_release", style="yellow")
         except ValueError:
             msg = (
-                FFMPEG_ERR[0].format(ffmpeg_path=ffmpeg_path)
+                t("ffmpeg.invalid_path", ffmpeg_path=ffmpeg_path)
                 if use_config or ffmpeg_changed
-                else FFMPEG_ERR[1]
+                else t("ffmpeg.not_found")
             )
             raise Exception(msg)
-        # If ffmpeg_path is set & valid, ask to overwrite config
-        if ffmpeg_changed and typer.confirm(
-            f"FFmpeg 경로 설정이 감지되었습니다. 설정 파일을 덮어쓸까요?"
-        ):
+
+        if ffmpeg_changed and ask("ffmpeg.overwrite_config"):
             dump_config(config)
 
         # handle login
@@ -147,76 +133,73 @@ def main(
         if batch.strip() != "":
             handle_batch(batch, quality, ffmpeg_path, version)
 
-        print()
+        # print()
 
         # main download loop
         while True:
             url, quality = get_url_input(quality)
             try:
                 manifest = get_manifest_wrap(url, quality)
-            except:
-                print()
+            except (
+                ValueError,
+                KeyError,
+                requests.exceptions.RequestException,
+            ):
+                # print()
                 continue
 
             download(manifest, ffmpeg_path, version)
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
-        console.print("프로그램이 중단되었습니다.", style="blue")
-        typer.Exit(code=0)
-        return
+        say("exit.interrupted", style="blue")
+        raise typer.Exit(code=0)
 
     # If any exception occurs, print the error message and exit
     except Exception as e:
         console.print(f"{e}", style="red")
-        console.print("프로그램을 종료합니다.", style="red")
-        typer.Exit(code=1)
-        return
+        say("exit.program", style="red")
+        raise typer.Exit(code=1)
 
     finally:
-        os.path.exists(os.path.join(os.getcwd(), "tmp")) and shutil.rmtree(
-            os.path.join(os.getcwd(), "tmp")
-        )
+        tmp_path = os.path.join(os.getcwd(), TMP_DIRNAME)
+        if os.path.exists(tmp_path):
+            shutil.rmtree(tmp_path)
 
 
 def handle_batch(batch: str, quality: str, ffmpeg: str, version: str) -> bool:
     if not os.path.exists(batch):
-        console.print(f"파일을 찾을 수 없습니다: {batch}", style="yellow")
-        console.print("배치 모드를 종료합니다.", style="yellow")
-        if not typer.confirm("일반 모드로 계속할까요?"):
-            typer.Exit(code=0)
-            return
+        say("batch.file_missing", style="yellow", batch=batch)
+        say("batch.exit", style="yellow")
+        if not ask("batch.continue_prompt"):
+            raise typer.Exit(code=0)
 
-    urls = []
-    with open(batch, "r") as f:
+    with open(batch, "r", encoding="utf-8") as f:
         urls = [url.strip() for url in f.readlines() if url.strip()]
 
     if len(urls) == 0:
-        console.print(
-            "배치 파일이 비어 있습니다. URL을 추가해 주세요.",
-            style="yellow",
-        )
+        say("batch.empty", style="yellow")
     else:
         for url in urls:
             try:
                 manifest = get_manifest_wrap(url, quality)
             except ValueError as e:
-                console.print(f"ValueError: {e}", style="yellow")
-                console.print(f"URL이 잘못되었습니다: {url}", style="yellow")
-                console.print("다음 URL로 계속합니다.", style="yellow")
+                say("error.url_value", style="yellow", error=e)
+                say("batch.invalid_url_error", style="yellow", url=url)
+                say("batch.next_url", style="yellow")
                 continue
 
             download(manifest, ffmpeg, version)
-        print()
-        console.print("배치 다운로드가 완료되었습니다.")
+        # print()
+        say("batch.complete")
 
-    return typer.confirm("일반 모드로 계속할까요?")
+    return ask("batch.continue_prompt")
 
 
 def dump_config(config: dict[str, str]) -> None:
     """설정 파일을 현재 작업 디렉토리에 저장합니다."""
 
-    with open(os.path.join(os.getcwd(), "config.json"), "w") as f:
+    with open(os.path.join(os.getcwd(), CONFIG_FILENAME), "w", encoding="utf-8") as f:
         json.dump(config, f, indent=4)
 
 
@@ -228,26 +211,24 @@ def handle_config(default: dict[str, str]) -> dict[str, str]:
     :param dict default: 기본 설정 값이 담긴 딕셔너리
     :return: 설정 파일에서 불러온 설정 값이 담긴 딕셔너리
     """
-    print()
-    config_path = os.path.join(os.getcwd(), "config.json")
+    # print()
+    config_path = os.path.join(os.getcwd(), CONFIG_FILENAME)
     if not os.path.exists(config_path):
-        console.print("설정 파일을 찾을 수 없습니다. 새로 생성합니다.", style="green")
+        say("config.missing", style="green")
         try:
             dump_config(default)
-            console.print("설정 파일을 성공적으로 생성했습니다.", style="green")
+            say("config.created", style="green")
         except Exception as e:
-            console.print(
-                f"설정 파일을 생성하는 중 오류가 발생했습니다: {e}", style="yellow"
-            )
+            say("config.create_error", style="yellow", error=e)
             if os.path.exists(config_path):
                 os.remove(config_path)
         finally:
             return default
-    else:
-        with open(config_path, "r") as f:
-            config = json.load(f)
-            console.print(f"설정 파일을 성공적으로 불러왔습니다.", style="green")
-            return config
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        config = json.load(f)
+        say("config.loaded", style="green")
+        return config
 
 
 def download(
@@ -265,10 +246,11 @@ def download(
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
 
-    print()
-    console.print(f"다운로드를 시작하는 중: ", style="yellow", end="")
+    # print()
+    console.print(t("download.start"), style="yellow", end="")
     console.print(manifest.title)
-    console.print("다운로드를 중단하려면 Q를 입력하세요.", style="yellow")
+    say("download.stop_hint", style="yellow")
+    completed_paths = []
 
     with Progress() as progress:
         total_duration, tmp_list = download_parts(
@@ -299,22 +281,22 @@ def get_credential_input(config: dict[str, str]) -> tuple[str, set[str]]:
     :return: 업데이트된 설정 딕셔너리와 변경된 항목의 집합
     :raises KeyboardInterrupt: 사용자가 입력을 중단한 경우
     """
-    changed = set()
+    changed: set[str] = set()
 
     prev_conf = copy.deepcopy(config)
 
-    config["username"] = typer.prompt("아이디")
-    config["password"] = typer.prompt("비밀번호")
-    config["second_password"] = typer.prompt(
-        "2차 비밀번호 (없으면 Enter)", default="", show_default=False
+    config["username"] = prompt_text("prompt.username")
+    config["password"] = prompt_text("prompt.password")
+    config["second_password"] = prompt_text(
+        "prompt.second_password", default="", show_default=False
     )
 
     if config["second_password"] != prev_conf["second_password"]:
-        changed.add("2차 비밀번호")
+        changed.add("changed.second_password")
     if config["username"] != prev_conf["username"]:
-        changed.add("닉네임")
+        changed.add("changed.username")
     if config["password"] != prev_conf["password"]:
-        changed.add("비밀번호")
+        changed.add("changed.password")
 
     return config, changed
 
@@ -329,10 +311,10 @@ def try_login(config: dict[str, str]) -> bool:
 
     try:
         SOOP.login(username, password, second_password)
-        console.print("로그인 성공", style="green")
+        say("login.success", style="green")
         return True
     except LoginError as e:
-        console.print(f"로그인 실패: {e}", style="yellow")
+        say("login.failure", style="yellow", error=e)
         return False
 
 
@@ -341,7 +323,7 @@ def check_ffmpeg_path(ffmpeg_path: str) -> int:
     FFmpeg 경로가 올바른지 확인합니다.
 
     :param str ffmpeg_path: FFmpeg 실행 파일의 경로
-    :return version: FFmpeg가 설치되어 있을 경우 빌드의 버전을 반환합니다. FFmpeg가 설치되어 있지 않거나 경로가 잘못된 경우 NULL을 반환합니다.
+    :return version: FFmpeg가 설치되어 있을 경우 빌드의 버전을 반환합니다.
     :raises ValueError: FFmpeg가 설치되어 있지 않거나 경로가 잘못된 경우
     """
     try:
@@ -356,8 +338,7 @@ def check_ffmpeg_path(ffmpeg_path: str) -> int:
             if "git" in version_info:
                 return version_info.split(" ")[2]
             return version_info.split(" ")[2].split("-")[0]
-        else:
-            raise ValueError
+        raise ValueError
     except (FileNotFoundError, subprocess.CalledProcessError):
         raise ValueError
 
@@ -396,7 +377,8 @@ def download_parts(
         )
 
         task = progress.add_task(
-            f"{i}/{total_parts}구간 다운로드 중...", total=duration
+            t("process.segment_downloading", current=i, total=total_parts),
+            total=duration,
         )
         _proc = download_process(
             ffmpeg_path, url, tmp_path, session=session, version=version
@@ -422,16 +404,16 @@ def download_parts(
         )
         if _proc.returncode != 0:
             progress.update(
-                task, description=f"{i}/{total_parts}구간 다운로드 중단", refresh=False
+                task,
+                description=t("process.segment_stopped", current=i, total=total_parts),
+                refresh=False,
             )
-            raise ProcessError(
-                "구간 다운로드 중 오류가 발생하였습니다. FFmpeg 경로가 올바른지 확인해 주세요."
-            )
+            raise ProcessError(t("error.download_segment"))
 
-        if vid_len < duration - 160:
+        if vid_len < duration - 300:
             progress.update(
                 task,
-                description=f"{i}/{total_parts}구간 다운로드 중단",
+                description=t("process.segment_stopped", current=i, total=total_parts),
                 refresh=False,
             )
             break
@@ -440,7 +422,7 @@ def download_parts(
                 task,
                 completed=1,
                 total=1,
-                description=f"{i}/{total_parts}구간 다운로드 완료",
+                description=t("process.segment_complete", current=i, total=total_parts),
                 refresh=False,
             )
 
@@ -509,7 +491,7 @@ def remove_temp_files(progress: Progress, tmp_list: list[str]):
     :param Progress progress: Rich Progress 객체
     :param list tmp_list: 제거할 임시 파일 목록
     """
-    task = progress.add_task("임시 파일 정리 중...", total=len(tmp_list))
+    task = progress.add_task(t("process.cleanup"), total=len(tmp_list))
     try:
         for part in tmp_list:
             os.remove(part)
@@ -517,13 +499,13 @@ def remove_temp_files(progress: Progress, tmp_list: list[str]):
         progress.update(
             task,
             completed=len(tmp_list),
-            description="임시 파일 정리 완료",
+            description=t("process.cleanup_complete"),
             refresh=False,
         )
     except OSError as e:
-        progress.update(task, description="임시 파일 정리 실패", refresh=False)
-        console.print(f"임시 파일 제거 중 오류가 발생하였습니다: {e}", style="yellow")
-        console.print("/tmp 폴더의 임시 파일을 직접 제거해 주세요.", style="yellow")
+        progress.update(task, description=t("process.cleanup_failed"), refresh=False)
+        say("process.cleanup_error", style="yellow", error=e)
+        say("process.cleanup_manual", style="yellow")
 
 
 def get_url_input(quality_d: str | None = "auto"):
@@ -534,10 +516,10 @@ def get_url_input(quality_d: str | None = "auto"):
     :raises KeyboardInterrupt: 사용자가 입력을 중단한 경우
     """
 
-    print()
+    # print()
     url = str(
         typer.prompt(
-            "다운로드할 VOD의 URL과 희망하는 품질(선택)을 입력하세요. (종료하려면 Enter)",
+            t("prompt.vod_input"),
             default="",
             show_default=False,
         )
@@ -551,9 +533,10 @@ def get_url_input(quality_d: str | None = "auto"):
     if url.split()[1] in QUALITY_MAPPING:
         return url.split()[0], url.split()[1]
 
-    console.print(
-        f"지원하지 않는 품질입니다.\n지원하는 품질: {QUALITY_MAPPING}",
+    say(
+        "quality.unsupported_input",
         style="yellow",
+        quality_options=", ".join(QUALITY_MAPPING),
     )
     return url.split()[0], quality_d
 
@@ -569,20 +552,18 @@ def get_manifest_wrap(url: str, quality: str) -> Manifest:
     try:
         return SOOP.get_manifest(url, quality)
     except ValueError as e:
-        console.print(f"ValueError: {e}", style="yellow")
-        console.print("SOOP VOD 플레이어 URL이 맞는지 확인해 주세요.", style="yellow")
-        raise e
+        say("error.url_value", style="yellow", error=e)
+        say("manifest.invalid_url", style="yellow")
+        raise
     except KeyError as e:
-        console.print(f"VOD 정보가 잘못되었습니다: {e}", style="red")
-        console.print(
-            "존재하지 않는 VOD이거나, 접근권한이 없을 수 있습니다.", style="red"
-        )
-        console.print("로그인 상태와 본인인증 여부를 확인해 주세요.", style="red")
-        raise e
+        say("manifest.vod_info_invalid", style="red", error=e)
+        say("manifest.vod_no_access", style="red")
+        say("manifest.login_state", style="red")
+        raise
     except requests.exceptions.RequestException as e:
-        console.print(f"정보를 불러오는 중 오류가 발생했습니다: {e}", style="red")
-        console.print("네트워크 연결을 확인해주세요.", style="red")
-        raise e
+        say("manifest.network_error", style="red", error=e)
+        say("manifest.network_check", style="red")
+        raise
 
 
 if __name__ == "__main__":
