@@ -191,7 +191,21 @@ class SOOP:
         for file_dict in objlist:
             for fileset in file_dict["quality_info"]:
                 if str(fileset["resolution"]).split("x")[-1] == desired_quality[:-1]:
-                    manifest.add_vod(fileset["file"], file_dict["duration"])
+                    manifest.add_vod(
+                        fileset["file"],
+                        file_dict["duration"],
+                        fileset["resolution"],
+                    )
+                if desired_quality[:-1] not in [
+                    str(fileset["resolution"]).split("x")[-1]
+                    for fileset in file_dict["quality_info"]
+                ]:
+                    manifest.add_vod(
+                        file_dict["quality_info"][1]["file"],
+                        file_dict["duration"],
+                        file_dict["quality_info"][1]["resolution"],
+                    )
+                    break
 
         manifest.set_title(data["title"])
 
