@@ -37,6 +37,42 @@ def get_app() -> typer.Typer:
     return app
 
 
+def say(
+    message_key: str, *, style: str | None = None, end: str = "\n", **kwargs
+) -> None:
+    console.print(t(message_key, **kwargs), style=style, end=end)
+
+
+def ask(message_key: str, **kwargs) -> bool:
+    return typer.confirm(t(message_key, **kwargs))
+
+
+def prompt_text(message_key: str, **kwargs) -> str:
+    return str(typer.prompt(t(message_key, **kwargs), **kwargs))
+
+
+def normalize_quality(quality: str) -> str:
+    normalized = quality.strip().lower()
+    if normalized not in QUALITY_MAPPING:
+        say(
+            "quality.unsupported",
+            style="yellow",
+            quality_options=", ".join(QUALITY_MAPPING),
+        )
+        say("quality.fallback", style="yellow")
+        return "auto"
+    return normalized
+
+
+def init_config(ffmpeg_path: str) -> dict[str, str]:
+    return {
+        "username": "",
+        "password": "",
+        "second_password": "",
+        "ffmpeg_path": ffmpeg_path,
+    }
+
+
 def resolve_ffprobe_path(ffmpeg_path: str) -> str | None:
     if ffmpeg_path == "ffmpeg":
         return "ffprobe"
@@ -45,6 +81,34 @@ def resolve_ffprobe_path(ffmpeg_path: str) -> str | None:
     if os.path.exists(ffprobe_path):
         return ffprobe_path
     return None
+
+
+def login_flow(
+    config: dict[str, str], use_config: bool
+) -> tuple[bool, set[str], dict[str, str]]:
+    changed: set[str] = set()
+
+    if not ask("auth.login_prompt"):
+        return SOOP.check_auth(), changed, config
+
+    # print()
+    if use_config:
+        is_logged_in = try_login(config)
+    else:
+        config, changed_once = get_credential_input(config)
+        changed.update(changed_once)
+        is_logged_in = try_login(config)
+
+    # print()
+    while not is_logged_in and ask("auth.retry_prompt"):
+        config, changed_once = get_credential_input(config)
+        changed.update(changed_once)
+        is_logged_in = try_login(config)
+        # print()
+
+    return is_logged_in, changed, config
+
+
 @app.command(name=None, help=t("help.app"))
 def main(
     language: Annotated[
@@ -79,29 +143,17 @@ def main(
     say("cli.force_quit", style="yellow")
 
     # Basic Config & ffmpeg flag
-    quality = quality.strip().lower()
-    if quality not in QUALITY_MAPPING:
-        console.print(
-            f"지원하지 않는 품질입니다.\n지원하는 품질: {QUALITY_MAPPING}",
-            style="yellow",
-        )
-        console.print("자동으로 최고 품질로 설정합니다.", style="yellow")
-
+    quality = normalize_quality(quality)
     ffmpeg_path = ffmpeg_path.strip().replace("\\", "/")
     ffmpeg_changed = ffmpeg_path != "ffmpeg"
-    config = {
-        "username": "",
-        "password": "",
-        "second_password": "",
-        "ffmpeg_path": ffmpeg_path,
-    }
+    config = init_config(ffmpeg_path)
 
     try:
-        # Load & overwrite config if given -c Flag
         if use_config:
             config = handle_config(config)
-            ffmpeg_path = config.get("ffmpeg_path")
+            ffmpeg_path = config.get("ffmpeg_path", "ffmpeg")
 
+        # print()
         try:
             version = check_ffmpeg_path(ffmpeg_path)
             if "git" in version:
@@ -117,33 +169,15 @@ def main(
         if ffmpeg_changed and ask("ffmpeg.overwrite_config"):
             dump_config(config)
 
-        # handle login
-        # If use_config is True, try to login with config
-        # If not, ask for login credentials
-        # when login fails, ask for retry
-        changed = set()
-        if typer.confirm("로그인하시겠습니까?"):
-            print()
-            if use_config:
-                res = try_login(config)
-            else:
-                config, _changed = get_credential_input(config)
-                res = try_login(config)
-                changed.update(_changed)
+        res, changed, config = login_flow(config, use_config)
 
-            print()
-            while not res and typer.confirm("로그인을 다시 시도할까요?"):
-                config, _changed = get_credential_input(config)
-                res = try_login(config)
-                changed.update(_changed)
-                print()
-        else:
-            res = SOOP.check_auth()
-
-        # If Login was successful & Auth params changed, ask to save config
-        __flag = res and (len(changed) > 0)
-        if __flag and typer.confirm(
-            f"설정을 저장할까요? 다음과 같은 설정이 변경되었습니다: {', '.join(changed)}"
+        if (
+            res
+            and changed
+            and ask(
+                "config.save_prompt",
+                changed=", ".join(t(item) for item in changed),
+            )
         ):
             dump_config(config)
 
