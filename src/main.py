@@ -37,8 +37,25 @@ def get_app() -> typer.Typer:
     return app
 
 
-@app.command(name=None, help=HELP[0])
+def resolve_ffprobe_path(ffmpeg_path: str) -> str | None:
+    if ffmpeg_path == "ffmpeg":
+        return "ffprobe"
+
+    ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path), "ffprobe")
+    if os.path.exists(ffprobe_path):
+        return ffprobe_path
+    return None
+@app.command(name=None, help=t("help.app"))
 def main(
+    language: Annotated[
+        str,
+        typer.Option(
+            "-l",
+            "--lang",
+            help=t("help.lang"),
+            show_default=False,
+        ),
+    ] = "",
     quality: Annotated[
         str,
         typer.Option("-q", "--quality", help=t("help.quality"), show_default=False),
@@ -253,24 +270,32 @@ def download(
     completed_paths = []
 
     with Progress() as progress:
-        total_duration, tmp_list = download_parts(
+        total_duration, tmp_nested_list = download_parts(
             progress, ffmpeg_path, manifest, version
         )
 
-        path = concat_parts(
-            progress,
-            ffmpeg_path,
-            manifest.title,
-            tmp_list,
-            total_duration,
-        )
+        current_concat = 0
+        for partial_duration, tmp_list in tmp_nested_list:
+            current_concat += 1
+            path = concat_parts(
+                progress,
+                ffmpeg_path,
+                manifest.title,
+                tmp_list,
+                partial_duration if len(tmp_nested_list) > 1 else total_duration,
+                current_concat=current_concat,
+                total_concats=len(tmp_nested_list),
+            )
+            completed_paths.append(path.replace("\\", "/"))
 
-        remove_temp_files(progress, tmp_list)
+        for _, tmp_list in tmp_nested_list:
+            remove_temp_files(progress, tmp_list)
         progress.stop()
 
-    console.print()
-    console.print(f"다운로드가 완료되었습니다: ", style="green", end="")
-    console.print(path.replace("\\", "/"), end="\n")
+    # console.print()
+    console.print(t("download.complete"), style="green", end="")
+    for path in completed_paths:
+        console.print(path, end="\n")
 
 
 def get_credential_input(config: dict[str, str]) -> tuple[str, set[str]]:
@@ -348,7 +373,7 @@ def download_parts(
     ffmpeg_path: str,
     manifest: Manifest,
     version: str = "7.1.1",
-) -> tuple[float, list[str]]:
+) -> tuple[float, list[tuple[float, list[str]]]]:
     """
     지정된 Manifest의 각 구간을 다운로드합니다.
 
@@ -363,16 +388,27 @@ def download_parts(
     i = 0
     total_parts = manifest.count()
     total_duration = 0.0
-    tmp_list = []
+    tmp_nested_tuple_list: list[tuple[float, list[str]]] = []
+    tmp_list: list[str] = []
 
     def _hash(str: str) -> str:
         return abs(hash(str)) % (10**8)
 
-    for url, duration in manifest.items:
+    prev_resolution = None
+    partial_duration = 0
+    for url, duration, resolution in manifest.items:
         i += 1
+
+        print(resolution, prev_resolution)
+        if resolution != prev_resolution and prev_resolution is not None:
+            tmp_nested_tuple_list.append((partial_duration, tmp_list))
+            partial_duration = 0
+            tmp_list = []
+
+        prev_resolution = resolution
         tmp_list.append(
             tmp_path := util.get_unique_filename(
-                os.path.join(os.getcwd(), "tmp", f"{_hash(manifest.title)}.mp4")
+                os.path.join(os.getcwd(), "tmp", f"{_hash(manifest.title)}.ts")
             )
         )
 
@@ -390,13 +426,9 @@ def download_parts(
             progress.update(task, completed=out_time)
 
         total_duration += progress._tasks[task].completed
+        partial_duration += progress._tasks[task].completed
         _proc.wait()
-        if ffmpeg_path != "ffmpeg":
-            ffprobe_path = os.path.join(os.path.dirname(ffmpeg_path), "ffprobe")
-            if not os.path.exists(ffprobe_path):
-                ffprobe_path = None
-        else:
-            ffprobe_path = "ffprobe"
+        ffprobe_path = resolve_ffprobe_path(ffmpeg_path)
 
         vid_len = (
             util.get_duration_ms(tmp_path, ffprobe_path)
@@ -426,7 +458,10 @@ def download_parts(
                 refresh=False,
             )
 
-    return total_duration, tmp_list
+    if tmp_list:
+        tmp_nested_tuple_list.append((partial_duration, tmp_list))
+
+    return total_duration, tmp_nested_tuple_list
 
 
 def concat_parts(
@@ -435,6 +470,8 @@ def concat_parts(
     title: str,
     parts: list[str],
     total_duration: float = 0.0,
+    current_concat: int = 1,
+    total_concats: int = 1,
 ) -> str:
     """
     지정된 비디오 파트들을 병합하여 하나의 비디오 파일로 만듭니다.
@@ -447,17 +484,18 @@ def concat_parts(
     :return path: 병합된 비디오 파일의 경로
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
-    task = progress.add_task("영상 합치는 중...", total=total_duration)
+    task = progress.add_task(
+        t("process.mergeing", current=current_concat, total=total_concats),
+        total=total_duration,
+    )
     path = util.get_unique_filename(
         os.path.join(os.getcwd(), f"{util.delete_spec_char(title)}.mp4")
     )
 
     try:
-        _proc = concat_process(
-            ffmpeg_path, path, list(map(lambda x: x.replace("\\", "/"), parts))
-        )
-    except Exception as e:
-        raise ProcessError("영상을 병합하는 중 오류가 발생하였습니다.")
+        _proc = concat_process(ffmpeg_path, path, parts)
+    except Exception:
+        raise ProcessError(t("error.concat_failed"))
 
     for out_time in util.read_out_time(_proc):
         if out_time == -1:
@@ -466,19 +504,31 @@ def concat_parts(
 
     _proc.wait()
     if _proc.returncode != 0:
-        progress.update(task, description="영상 병합 중단", refresh=False)
-        raise ProcessError(
-            "영상 병합 중 오류가 발생하였습니다. FFmpeg 경로가 올바른지 확인해 주세요."
+        progress.update(
+            task,
+            description=t(
+                "process.merge_stopped", current=current_concat, total=total_concats
+            ),
+            refresh=False,
         )
+        raise ProcessError(t("error.concat_end"))
 
     if progress._tasks[task].completed < total_duration - 1:
-        progress.update(task, description="영상 병합 중단", refresh=False)
+        progress.update(
+            task,
+            description=t(
+                "process.merge_stopped", current=current_concat, total=total_concats
+            ),
+            refresh=False,
+        )
     else:
         progress.update(
             task,
             completed=100,
             total=100,
-            description=f"영상 병합 완료",
+            description=t(
+                "process.merge_complete", current=current_concat, total=total_concats
+            ),
             refresh=False,
         )
         return path
