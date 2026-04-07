@@ -1,5 +1,5 @@
 import requests
-from src.model import Types, Manifest, PlayerUrl, VodUrl
+from src.model import Manifest, PlayerUrl, VodUrl
 from src.util.i18n import t
 
 VOD_API = "https://api.m.sooplive.com/station/video/a/view"
@@ -165,7 +165,7 @@ class SOOP:
         :raises requests.exceptions.RequestException: 요청 실패
         """
 
-        url: Types.player_url = Types.player_url(url)
+        url: PlayerUrl = PlayerUrl(url)
         manifest = Manifest()
         session = cls.session()
 

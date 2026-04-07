@@ -1,56 +1,58 @@
 from dataclasses import dataclass
 import urllib.parse
 
+from src.util.i18n import t
 
-class Types:
-    class title(str): ...
 
-    @dataclass
-    class url:
-        def __init__(self, value: str):
-            parsed = urllib.parse.urlparse(value)
-            self.__netloc = parsed.netloc
-            self.__path = parsed.path
-            self.__path_parts = parsed.path.split("/")
+class TitleType(str): ...
 
-        @property
-        def netloc(self) -> str:
-            return self.__netloc
 
-        @property
-        def path(self) -> str:
-            return self.__path
+class UrlType:
+    def __init__(self, value: str):
+        parsed = urllib.parse.urlparse(value)
+        self.__netloc = parsed.netloc
+        self.__path = parsed.path
+        self.__path_parts = parsed.path.split("/")
 
-        @property
-        def path_parts(self) -> list[str]:
-            return self.__path_parts
+    @property
+    def netloc(self) -> str:
+        return self.__netloc
 
-    @dataclass
-    class player_url(url):
-        __title_no: int = None
+    @property
+    def path(self) -> str:
+        return self.__path
 
-        def __init__(self, value: str):
-            super().__init__(value)
-            self.__validate__()
-            try:
-                player_idx = self.path_parts.index("player")
-                self.__title_no = int(self.path_parts[player_idx + 1])
-            except (ValueError, IndexError):
-                raise ValueError("VOD 고유번호를 찾을 수 없습니다.")
+    @property
+    def path_parts(self) -> list[str]:
+        return self.__path_parts
 
-        def __validate__(self) -> None:
-            """유효한 player_url인지 확인합니다."""
-            if (
-                "player" not in self.path_parts
-                or "vod.sooplive.co.kr" not in self.netloc
-            ):
-                raise ValueError("유효하지 않은 URL입니다.")
 
-        @property
-        def title_no(self) -> int:
-            return self.__title_no
+class PlayerUrl(UrlType):
+    __title_no: int = None
 
-    @dataclass
-    class vod_url(url): ...
+    def __init__(self, value: str):
+        super().__init__(value)
+        self.__validate__()
+        try:
+            player_idx = self.path_parts.index("player")
+            self.__title_no = int(self.path_parts[player_idx + 1])
+        except (ValueError, IndexError):
+            raise ValueError(t("error.vod_id_not_found"))
 
-    class duration(int): ...
+    def __validate__(self) -> None:
+        """유효한 player_url인지 확인합니다."""
+        if "player" not in self.path_parts or "vod.sooplive" not in self.netloc:
+            raise ValueError(t("error.invalid_player_url"))
+
+    @property
+    def title_no(self) -> int:
+        return self.__title_no
+
+
+class VodUrl(UrlType): ...
+
+
+class DurationType(int): ...
+
+
+class ResolutionType(str): ...
