@@ -10,7 +10,6 @@ def download_process(
     url: str,
     path: str,
     session: requests.Session | None = None,
-    turbo: bool = False,
     version: str = "7.1.1",
 ) -> subprocess.Popen:
     """
@@ -41,7 +40,7 @@ def download_process(
         "-c",
         "copy",
         "-movflags",
-        "faststart+frag_keyframe",
+        "faststart",
         "-f",
         "mp4",
         "-v",
@@ -49,11 +48,9 @@ def download_process(
         # "-stats",
         "-progress",
         "pipe:1",
+        "-threads",
+        "0",
     ]
-
-    if turbo:
-        ffmpeg_cmd.append("-threads")
-        ffmpeg_cmd.append("0")
 
     if "git" not in version:
         if int(version.split(".")[0]) >= 7 and int(version.split(".")[1]) >= 1:
@@ -77,7 +74,6 @@ def concat_process(
     ffmpeg_path: str,
     export_path: str,
     part_list: list[str],
-    turbo: bool = False,
 ) -> subprocess.Popen:
     """
     병합 프로세스를 생성하고 반환합니다.
@@ -109,10 +105,6 @@ def concat_process(
         "pipe:1",
         export_path,
     ]
-
-    if turbo:
-        concat_cmd.append("-threads")
-        concat_cmd.append("0")
 
     return subprocess.Popen(
         concat_cmd,
