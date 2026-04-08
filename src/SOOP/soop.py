@@ -1,5 +1,5 @@
 import requests
-from src.model import Types, Manifest
+from src.model import Manifest, PlayerUrl, VodUrl
 
 VOD_API = "https://api.m.sooplive.com/station/video/a/view"
 LOGIN_API = "https://login.sooplive.com/app/LoginAction.php"
@@ -164,7 +164,7 @@ class SOOP:
         :raises requests.exceptions.RequestException: 요청 실패
         """
 
-        url: Types.player_url = Types.player_url(url)
+        url: PlayerUrl = PlayerUrl(url)
         manifest = Manifest()
         session = cls.session()
 
@@ -190,7 +190,9 @@ class SOOP:
         for file_dict in objlist:
             for fileset in file_dict["quality_info"]:
                 if str(fileset["resolution"]).split("x")[-1] == desired_quality[:-1]:
-                    manifest.add_vod(fileset["file"], file_dict["duration"])
+                    manifest.add_vod(
+                        fileset["file"], file_dict["duration"], fileset["resolution"]
+                    )
 
         manifest.set_title(data["title"])
 

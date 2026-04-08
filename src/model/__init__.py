@@ -1,3 +1,3 @@
 from . import *
-from .types import Types
+from .types import *
 from .manifest import Manifest

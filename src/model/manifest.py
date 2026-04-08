@@ -1,14 +1,14 @@
 from dataclasses import dataclass, field
-from src.model import Types
+from src.model import UrlType, DurationType, ResolutionType, TitleType, PlayerUrl
 
 
 @dataclass
 class Manifest:
-    title: Types.title | None = ""
-    url_list: list[Types.player_url] = field(default_factory=list)
-    duration_list: list[Types.duration] = field(default_factory=list)
+    title: TitleType | None = ""
+    url_list: list[PlayerUrl] = field(default_factory=list)
+    duration_list: list[DurationType] = field(default_factory=list)
 
-    def set_title(self, value: Types.title):
+    def set_title(self, value: TitleType):
         """
         매니페스트의 제목을 설정합니다.
 
@@ -16,12 +16,18 @@ class Manifest:
         """
         self.title = value
 
-    def add_vod(self, url: Types.player_url, duration: Types.duration):
+    def add_vod(
+        self,
+        url: PlayerUrl,
+        duration: DurationType,
+        resolution: ResolutionType,
+    ):
         """
         매니페스트에 VOD를 추가합니다.
 
         :param url: VOD의 URL
         :param duration: VOD의 길이 (밀리초 단위)
+        :param resolution: VOD의 해상도
         """
         self.url_list.append(url)
         self.duration_list.append(duration)
@@ -38,14 +44,14 @@ class Manifest:
         """
         return self.count() == 0
 
-    def duration(self) -> Types.duration:
+    def duration(self) -> DurationType:
         """
         전체 VOD의 총 길이를 반환합니다.
         """
         return sum(self.duration_list)
 
     @property
-    def items(self) -> list[tuple[Types.url, Types.duration]]:
+    def items(self) -> list[tuple[UrlType, DurationType, ResolutionType]]:
         """
         URL과 Duration의 튜플 리스트를 반환합니다.
         """
