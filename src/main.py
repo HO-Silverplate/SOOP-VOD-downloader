@@ -7,11 +7,9 @@ import typer
 import json
 import os
 import requests
-import subprocess
 
 from src.process import download_process, concat_process, create_concat_list
-from src.util import util
-from src.util.i18n import set_language, t
+from src.util import util, check_ffmpeg_path, set_language, t
 from src.SOOP import SOOP, LoginError
 from src.model import Manifest
 
@@ -472,31 +470,6 @@ def try_login(config: dict[str, str]) -> bool:
     except LoginError as e:
         say("login.failure", style="yellow", error=e)
         return False
-
-
-def check_ffmpeg_path(ffmpeg_path: str) -> int:
-    """
-    FFmpeg 경로가 올바른지 확인합니다.
-
-    :param str ffmpeg_path: FFmpeg 실행 파일의 경로
-    :return version: FFmpeg가 설치되어 있을 경우 빌드의 버전을 반환합니다.
-    :raises ValueError: FFmpeg가 설치되어 있지 않거나 경로가 잘못된 경우
-    """
-    try:
-        result = subprocess.run(
-            [ffmpeg_path, "-version"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        version_info = result.stdout.split("\n")[0]
-        if "ffmpeg" in version_info:
-            if "git" in version_info:
-                return version_info.split(" ")[2]
-            return version_info.split(" ")[2].split("-")[0]
-        raise ValueError
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        raise ValueError
 
 
 def download_parts(
