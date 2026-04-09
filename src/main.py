@@ -514,7 +514,6 @@ def download_parts(
     for url, duration, resolution in manifest.items:
         i += 1
 
-        print(resolution, prev_resolution)
         if resolution != prev_resolution and prev_resolution is not None:
             tmp_nested_tuple_list.append((partial_duration, tmp_list))
             partial_duration = 0
