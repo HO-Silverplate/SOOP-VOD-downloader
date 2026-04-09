@@ -4,6 +4,7 @@
   "help.config": "설정 파일을 사용합니다. \n\n설정 파일이 존재하지 않으면 새로 생성합니다.\n\n",
   "help.ffmpeg": "출력에 사용되는 ffmpeg.exe의 경로를 지정합니다. \n\n",
   "help.batch": "배치 모드로 실행합니다. \n\nURL을 .txt 파일에서 읽어옵니다.\n\n파일 작성법은 README.md를 참고해 주세요.\n\n",
+  "help.keep": "임시 파일을 유지합니다. \n\n설정 시 다운로드 후 임시 파일을 삭제하지 않습니다.\n\n",
   "help.lang": "실행 시 사용할 언어(로케일 식별자)를 지정합니다. \n\n시스템 언어를 기본값으로 사용하며, 예: ko_KR, en_US\n\n",
   "cli.force_quit": "프로그램을 강제종료하려면 Ctrl+C를 입력하세요.",
   "quality.unsupported": "지원하지 않는 품질입니다.\n지원하는 품질: {quality_options}",

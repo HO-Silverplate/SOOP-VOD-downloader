@@ -138,6 +138,12 @@ def main(
         str,
         typer.Option("-b", "--batch", help=t("help.batch"), show_default=False),
     ] = "",
+    keep_temp: Annotated[
+        bool,
+        typer.Option(
+            "-k", "--keep", help=t("help.keep"), show_default=False, is_flag=True
+        ),
+    ] = False,
 ):
     set_language(language or None)
     say("cli.force_quit", style="yellow")
@@ -182,9 +188,7 @@ def main(
             dump_config(config)
 
         if batch.strip() != "":
-            handle_batch(batch, quality, ffmpeg_path, version)
-
-        # print()
+            handle_batch(batch, quality, ffmpeg_path, version, keep_temp=keep_temp)
 
         # main download loop
         while True:
@@ -199,7 +203,7 @@ def main(
                 # print()
                 continue
 
-            download(manifest, ffmpeg_path, version)
+            download(manifest, ffmpeg_path, version, keep_temp=keep_temp)
 
     # Handle KeyboardInterrupt gracefully
     except KeyboardInterrupt:
@@ -213,12 +217,15 @@ def main(
         raise typer.Exit(code=1)
 
     finally:
-        tmp_path = os.path.join(os.getcwd(), TMP_DIRNAME)
-        if os.path.exists(tmp_path):
-            shutil.rmtree(tmp_path)
+        if not keep_temp:
+            tmp_path = os.path.join(os.getcwd(), TMP_DIRNAME)
+            if os.path.exists(tmp_path):
+                shutil.rmtree(tmp_path)
 
 
-def handle_batch(batch: str, quality: str, ffmpeg: str, version: str) -> bool:
+def handle_batch(
+    batch: str, quality: str, ffmpeg: str, version: str, keep_temp: bool = False
+) -> bool:
     if not os.path.exists(batch):
         say("batch.file_missing", style="yellow", batch=batch)
         say("batch.exit", style="yellow")
@@ -240,7 +247,7 @@ def handle_batch(batch: str, quality: str, ffmpeg: str, version: str) -> bool:
                 say("batch.next_url", style="yellow")
                 continue
 
-            download(manifest, ffmpeg, version)
+            download(manifest, ffmpeg, version, keep_temp=keep_temp)
         # print()
         say("batch.complete")
 
@@ -286,6 +293,7 @@ def download(
     manifest: Manifest,
     ffmpeg_path: str,
     version: str = "7.1.1",
+    keep_temp: bool = False,
 ):
     """
     지정된 해상도를 목표로 다운로드를 시작합니다 .
@@ -322,8 +330,9 @@ def download(
             )
             completed_paths.append(path.replace("\\", "/"))
 
-        for _, tmp_list in tmp_nested_list:
-            remove_temp_files(progress, tmp_list)
+        if not keep_temp:
+            for _, tmp_list in tmp_nested_list:
+                remove_temp_files(progress, tmp_list)
         progress.stop()
 
     # console.print()
