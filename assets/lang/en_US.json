@@ -7,7 +7,7 @@
   "help.input": "a VOD URL to process.\n\nWhen set, interactive steps including authentication will be skipped.\n\n",
   "help.keep": "Keeps temporary files.\n\nWhen set, temporary files are not deleted after download.\n\n",
   "help.merge": "Runs in merge mode.\n\nTemporary files won't be deleted and other arguments except -f option will be ignored.\n\n",
-  "help.lang": "Sets the runtime language (locale identifier). \n\nUses system locale by default, e.g. ko_KR, en_US.\n\n",
+  "help.lang": "Sets the runtime language (locale identifier). \n\nUses system locale by default. If a language file is not found, English will be used. e.g. ko_KR, en_US.\n\n",
   "cli.force_quit": "Press Ctrl+C to force the program to exit.",
   "quality.unsupported": "Unsupported quality.\nSupported qualities: {quality_options}",
   "quality.fallback": "Automatically switching to the highest quality.",
