@@ -9,7 +9,7 @@ import os
 import requests
 import subprocess
 
-from src.process import download_process, concat_process
+from src.process import download_process, concat_process, create_concat_list
 from src.util import util
 from src.util.i18n import set_language, t
 from src.SOOP import SOOP, LoginError
@@ -109,6 +109,60 @@ def login_flow(
     return is_logged_in, changed, config
 
 
+def select_merge_list() -> str:
+    cwd = os.getcwd()
+    candidates = sorted(
+        [
+            os.path.join(root, filename)
+            for (root, dir, files) in os.walk(cwd)
+            for filename in files
+            if filename.startswith("list")
+            and filename.endswith(".txt")
+            and os.path.isfile(os.path.join(root, filename))
+        ]
+    )
+
+    if not candidates:
+        raise Exception(t("merge.no_list_files"))
+
+    say("merge.list_header")
+    for idx, filename in enumerate(candidates, start=1):
+        console.print(f"[{idx}] {filename}")
+
+    while True:
+        selected = prompt_text("merge.select_prompt")
+        try:
+            selected_idx = int(selected)
+            if 1 <= selected_idx <= len(candidates):
+                return os.path.join(cwd, candidates[selected_idx - 1])
+        except ValueError:
+            pass
+        say("merge.invalid_selection", style="yellow")
+
+
+def resolve_merge_path() -> str:
+    while True:
+        output_name = prompt_text("merge.output_prompt").strip()
+        if output_name:
+            break
+        say("merge.invalid_output", style="yellow")
+
+    output_path = (
+        output_name
+        if os.path.isabs(output_name)
+        else os.path.join(os.getcwd(), output_name)
+    )
+    root, ext = os.path.splitext(output_path)
+    if not ext:
+        output_path = f"{output_path}.mp4"
+
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    return output_path
+
+
 @app.command(name=None, help=t("help.app"))
 def main(
     language: Annotated[
@@ -144,6 +198,18 @@ def main(
             "-k", "--keep", help=t("help.keep"), show_default=False, is_flag=True
         ),
     ] = False,
+    merge: Annotated[
+        bool,
+        typer.Option(
+            "-m",
+            "--merge",
+            help=t("help.merge"),
+            show_default=False,
+            is_flag=True,
+            # is_eager=True,
+            # callback=merge_mode_callback,
+        ),
+    ] = False,
 ):
     set_language(language or None)
     say("cli.force_quit", style="yellow")
@@ -174,6 +240,28 @@ def main(
 
         if ffmpeg_changed and ask("ffmpeg.overwrite_config"):
             dump_config(config)
+
+        if merge:
+            keep_temp = True
+            list_file_path = select_merge_list()
+            output_path = resolve_merge_path()
+
+            say("merge.start", list_file=list_file_path)
+            proc = concat_process(ffmpeg_path, output_path, list_file_path)
+            for _ in util.read_out_time(proc):
+                pass
+            proc.wait()
+
+            if proc.returncode != 0:
+                raise ProcessError(t("error.concat_end"))
+
+            say(
+                "merge.complete",
+                style="green",
+                output_path=output_path.replace("\\", "/"),
+            )
+
+            return
 
         res, changed, config = login_flow(config, use_config)
 
@@ -524,9 +612,12 @@ def concat_parts(
     :param str title: 최종 비디오 파일의 제목
     :param list parts: 병합할 비디오 파트들의 경로 리스트
     :param float total_duration: 전체 비디오의 총 길이 (밀리초 단위)
+    :param int current_concat: 현재 병합 작업의 순서 (예: 1, 2, ...)
+    :param int total_concats: 전체 병합 작업의 총 개수
     :return path: 병합된 비디오 파일의 경로
     :raises ProcessError: 중대한 오류가 발생하여 프로그램을 종료해야 하는 경우
     """
+
     task = progress.add_task(
         t("process.mergeing", current=current_concat, total=total_concats),
         total=total_duration,
@@ -536,7 +627,8 @@ def concat_parts(
     )
 
     try:
-        _proc = concat_process(ffmpeg_path, path, parts)
+        list_file = create_concat_list(parts)
+        _proc = concat_process(ffmpeg_path, path, list_file)
     except Exception:
         raise ProcessError(t("error.concat_failed"))
 
@@ -556,7 +648,7 @@ def concat_parts(
         )
         raise ProcessError(t("error.concat_end"))
 
-    if progress._tasks[task].completed < total_duration - 1:
+    if progress._tasks[task].completed < total_duration - 100:
         progress.update(
             task,
             description=t(
@@ -574,7 +666,7 @@ def concat_parts(
             ),
             refresh=False,
         )
-        return path
+    return path
 
 
 def remove_temp_files(progress: Progress, tmp_list: list[str]):

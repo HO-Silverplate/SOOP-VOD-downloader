@@ -73,16 +73,11 @@ def download_process(
 def concat_process(
     ffmpeg_path: str,
     export_path: str,
-    part_list: list[str],
+    list_file_path: str,
 ) -> subprocess.Popen:
     """
     병합 프로세스를 생성하고 반환합니다.
     """
-    tmp_path = os.path.join(os.getcwd(), "tmp", f"list_{time()}.txt")
-    with open(tmp_path, "w", encoding="utf-8") as tmp:
-        for part in part_list:
-            tmp.write(f"file '{part}'\n")
-
     concat_cmd = [
         ffmpeg_path,
         "-f",
@@ -90,7 +85,7 @@ def concat_process(
         "-safe",
         "0",
         "-i",
-        tmp_path,
+        list_file_path,
         "-c",
         "copy",
         "-threads",
@@ -98,9 +93,10 @@ def concat_process(
         "-y",
         "-v",
         "error",
+        "-fflags",
+        "+genpts",
         "-movflags",
         "faststart",
-        # "-stats",
         "-progress",
         "pipe:1",
         export_path,
@@ -111,6 +107,13 @@ def concat_process(
         stdin=sys.stdin,
         stdout=subprocess.PIPE,
         stderr=sys.stderr,
-        # stderr=subprocess.STDOUT,
         text=True,
     )
+
+
+def create_concat_list(part_list: list[str]) -> str:
+    list_path = os.path.join(os.getcwd(), "tmp", f"list_{time()}.txt")
+    with open(list_path, "w", encoding="utf-8") as tmp:
+        for part in part_list:
+            tmp.write(f"file '{part}'\n")
+    return list_path
