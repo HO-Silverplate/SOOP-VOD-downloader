@@ -1,5 +1,6 @@
 import requests
 from src.model import Manifest, PlayerUrl, VodUrl
+from src.util.i18n import t
 
 VOD_API = "https://api.m.sooplive.com/station/video/a/view"
 LOGIN_API = "https://login.sooplive.com/app/LoginAction.php"
@@ -90,21 +91,21 @@ class SOOP:
         try:
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            msg = f"서버에 연결할 수 없습니다 - {e}"
+            msg = t("soop.server_unreachable", error=e)
 
         match response.json().get("RESULT", 1024):
             case 1:
                 return cls.check_auth()
             case -1:
-                msg = "등록되지 않은 아이디이거나, 아이디 또는 비밀번호를 잘못 입력하셨습니다."
+                msg = t("soop.invalid_credentials")
             case -3:
-                msg = "아이디가 비활성화되었습니다."
+                msg = t("soop.disabled")
             case -10:
-                msg = "아이디의 비정상적인 로그인(대량 접속 등)이 확인되어 접속이 차단되었습니다."
+                msg = t("soop.suspicious_login")
             case -11:
                 return cls.sec_login(username, sec_password)
             case _:
-                msg = "SOOP에 로그인할 수 없습니다."
+                msg = t("soop.login_failed")
         raise LoginError(msg)
 
     @classmethod
@@ -128,12 +129,12 @@ class SOOP:
             )
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            msg = f"서버에 연결할 수 없습니다 - {e}"
+            msg = t("soop.server_unreachable", error=e)
 
         if response.status_code == 200 and response.json().get("RESULT", 0) == 1:
             return True
         else:
-            msg = "2차 인증에 실패했습니다."
+            msg = t("soop.second_auth_failed")
 
         raise LoginError(msg)
 
@@ -147,7 +148,7 @@ class SOOP:
             response = session.get(LOGOUT_API, timeout=3)
             response.raise_for_status()
         except requests.exceptions.RequestException as e:
-            raise LoginError(f"SOOP에서 로그아웃할 수 없습니다 : {e}")
+            raise LoginError(t("soop.logout_failed", error=e))
 
     @classmethod
     def get_manifest(cls, url: str, quality: str | None = None) -> Manifest:
@@ -191,12 +192,24 @@ class SOOP:
             for fileset in file_dict["quality_info"]:
                 if str(fileset["resolution"]).split("x")[-1] == desired_quality[:-1]:
                     manifest.add_vod(
-                        fileset["file"], file_dict["duration"], fileset["resolution"]
+                        fileset["file"],
+                        file_dict["duration"],
+                        fileset["resolution"],
                     )
+                if desired_quality[:-1] not in [
+                    str(fileset["resolution"]).split("x")[-1]
+                    for fileset in file_dict["quality_info"]
+                ]:
+                    manifest.add_vod(
+                        file_dict["quality_info"][1]["file"],
+                        file_dict["duration"],
+                        file_dict["quality_info"][1]["resolution"],
+                    )
+                    break
 
         manifest.set_title(data["title"])
 
         if manifest.is_empty():
-            raise KeyError("Manifest Empty.")
+            raise KeyError(t("error.manifest_empty"))
 
         return manifest

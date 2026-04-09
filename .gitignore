@@ -10,6 +10,7 @@ env/
 *.mp4
 *.json
 *.log
-*.spec
 *.workspace
 *.pyc
+
+!assets/lang/*.json

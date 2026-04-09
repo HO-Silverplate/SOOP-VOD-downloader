@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 import urllib.parse
 
+from src.util.i18n import t
+
 
 class TitleType(str): ...
 
@@ -35,12 +37,12 @@ class PlayerUrl(UrlType):
             player_idx = self.path_parts.index("player")
             self.__title_no = int(self.path_parts[player_idx + 1])
         except (ValueError, IndexError):
-            raise ValueError("VOD 고유번호를 찾을 수 없습니다")
+            raise ValueError(t("error.vod_id_not_found"))
 
     def __validate__(self) -> None:
         """유효한 player_url인지 확인합니다."""
         if "player" not in self.path_parts or "vod.sooplive" not in self.netloc:
-            raise ValueError("유효하지 않은 URL입니다.")
+            raise ValueError(t("error.invalid_player_url"))
 
     @property
     def title_no(self) -> int:
