@@ -392,8 +392,9 @@ def download(
     """
 
     # print()
-    console.print(t("download.start"), style="yellow", end="")
+    say("download.start", style="yellow", end="")
     console.print(manifest.title)
+
     say("download.stop_hint", style="yellow")
     completed_paths = []
 
@@ -422,7 +423,7 @@ def download(
         progress.stop()
 
     # console.print()
-    console.print(t("download.complete"), style="green", end="")
+    say("download.complete", style="green")
     for path in completed_paths:
         console.print(path, end="\n")
 
@@ -673,8 +674,6 @@ def get_url_input(quality_d: str | None = "auto"):
     :return url: 입력받은 URL
     :raises KeyboardInterrupt: 사용자가 입력을 중단한 경우
     """
-
-    # print()
     url = str(
         typer.prompt(
             t("prompt.vod_input"),
