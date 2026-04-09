@@ -4,6 +4,7 @@
   "help.config": "Use pre-configured configuration file.\n\nCreates a new config file if there isn't any.\n\n",
   "help.ffmpeg": "Sets the path to the ffmpeg.exe used for output.\n\n",
   "help.batch": "Runs in batch mode.\n\nReads URLs from a .txt file.\n\nSee README.md for the file format.\n\n",
+  "help.input": "a VOD URL to process.\n\nWhen set, interactive steps including authentication will be skipped.\n\n",
   "help.keep": "Keeps temporary files.\n\nWhen set, temporary files are not deleted after download.\n\n",
   "help.merge": "Runs in list-file merge mode.\n\nCannot be used with any other options.\n\n",
   "help.lang": "Sets the runtime language (locale identifier). \n\nUses system locale by default, e.g. ko_KR, en_US.\n\n",

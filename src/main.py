@@ -190,6 +190,10 @@ def main(
         str,
         typer.Option("-b", "--batch", help=t("help.batch"), show_default=False),
     ] = "",
+    input_url: Annotated[
+        str,
+        typer.Option("-i", "--input", help=t("help.input"), show_default=False),
+    ] = "",
     keep_temp: Annotated[
         bool,
         typer.Option(
@@ -236,7 +240,7 @@ def main(
             )
             raise Exception(msg)
 
-        if ffmpeg_changed and ask("ffmpeg.overwrite_config"):
+        if ffmpeg_changed and not input_url and ask("ffmpeg.overwrite_config"):
             dump_config(config)
 
         if merge:
@@ -259,6 +263,12 @@ def main(
                 output_path=output_path.replace("\\", "/"),
             )
 
+            return
+
+        # Direct mode: skip interactive middle steps and handle a single input URL.
+        if input_url.strip():
+            manifest = get_manifest_wrap(input_url.strip(), quality)
+            download(manifest, ffmpeg_path, version, keep_temp=keep_temp)
             return
 
         res, changed, config = login_flow(config, use_config)
